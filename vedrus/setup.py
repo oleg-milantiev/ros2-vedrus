@@ -20,8 +20,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'left = vedrus.left:main',
-            'right = vedrus.right:main'
+            'ardu = vedrus.ardu:main',
+            'test = vedrus.test:main'
         ],
     },
 )

@@ -1,8 +1,6 @@
 cd /opt/ros/iron
 colcon build --packages-select vedrus vedrus_interfaces
-
-apt install python3-serial
-
 source /opt/ros/iron/install/local_setup.bash
+apt-get install -y python3-serial
 ros2 run vedrus left
 

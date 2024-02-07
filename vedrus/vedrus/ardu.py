@@ -9,16 +9,19 @@ import rclpy
 import serial
 from rclpy.node import Node
 
-from std_msgs.msg import UInt8, UInt16
+from std_msgs.msg import UInt8, UInt16, Float32
 from sensor_msgs.msg import Temperature, RelativeHumidity
 from vedrus_interfaces.msg import Motor, MotorMove
 
 
 ser = serial.Serial('/dev/ttyUSB0', 115200, rtscts=True)
 
+# todo move to argv
+side = 'left'
 
-class VedrusLeftNode(Node):
+class VedrusArduNode(Node):
     buf = ''
+    count = 0
 
     def move_motor(self, msg):
         buf = [ord('c')]
@@ -31,25 +34,26 @@ class VedrusLeftNode(Node):
         ser.write(buf)
 
     def __init__(self):
-        super().__init__('vedrus_left_node')
+        super().__init__('vedrus_'+ side +'_node')
 
         self.subscription = self.create_subscription(
             MotorMove,
-            'vedrus/left/move',
+            'vedrus/'+ side +'/move',
             self.move_motor,
             10)
         self.subscription  # prevent unused variable warning
 
+        self.publisher
+        self.publisher_temperature = self.create_publisher(Temperature, 'vedrus/'+ side +'/temperature', 10)
+        self.publisher_humidity = self.create_publisher(RelativeHumidity, 'vedrus/'+ side +'/humidity', 10)
+        self.publisher_sonar1 = self.create_publisher(Float32, 'vedrus/'+ side +'/front/sonar', 10)
+        self.publisher_sonar2 = self.create_publisher(Float32, 'vedrus/'+ side +'/rear/sonar', 10)
+
+        self.publisher_motor_front = self.create_publisher(Motor, 'vedrus/'+ side +'/front/motor', 10)
+        self.publisher_motor_rear = self.create_publisher(Motor, 'vedrus/'+ side +'/rear/motor', 10)
+
         self.timer = self.create_timer(0.1, self.read_serial)
         self.timer  # prevent unused variable warning
-
-        self.publisher_temperature = self.create_publisher(Temperature, 'vedrus/left/temperature', 10)
-        self.publisher_humidity = self.create_publisher(RelativeHumidity, 'vedrus/left/humidity', 10)
-        self.publisher_sonar1 = self.create_publisher(UInt8, 'vedrus/left/front/sonar', 10)
-        self.publisher_sonar2 = self.create_publisher(UInt8, 'vedrus/left/rear/sonar', 10)
-
-        self.publisher_motor_front = self.create_publisher(Motor, 'vedrus/left/front/motor', 10)
-        self.publisher_motor_rear = self.create_publisher(Motor, 'vedrus/left/rear/motor', 10)
 
     def read_serial(self):
         if ser.in_waiting > 0:
@@ -63,7 +67,7 @@ class VedrusLeftNode(Node):
             for line in lines:
                 div = line.split(',')
 
-                if len(div) == 12 and div[0] == 'VEDRUS' and div[ len(div) - 1 ] == 'END':
+                if len(div) == 12 and (div[0] == 'VEDL' or div[0] == 'VEDR') and div[ len(div) - 1 ] == 'END':
 
                     try:
                         '''
@@ -75,9 +79,9 @@ class VedrusLeftNode(Node):
                                              vedrus/left/front/motor
                         4: speed2         -> vedrus_interfaces/Motor->tick
                                              vedrus/left/rear/motor
-                        5: sonar1         -> std_msgs/msg/UInt8
+                        5: sonar1         -> std_msgs/msg/Float32
                                              vedrus/left/front/sonar
-                        6: sonar2         -> std_msgs/msg/UInt8
+                        6: sonar2         -> std_msgs/msg/Float32
                                              vedrus/left/rear/sonar
                         7: temperature    -> sensor_msgs/msg/Temperature
                                          vedrus/left/temperature
@@ -97,38 +101,41 @@ class VedrusLeftNode(Node):
                         msg.variance = 0.
                         self.publisher_humidity.publish(msg)
 
-                        msg = UInt8()
-                        msg.data = int(div[5])
+                        msg = Float32()
+                        msg.data = float(div[5])
                         self.publisher_sonar1.publish(msg)
 
-                        msg = UInt8()
-                        msg.data = int(div[6])
+                        msg = Float32()
+                        msg.data = float(div[6])
                         self.publisher_sonar2.publish(msg)
 
                         msg = Motor()
                         msg.tick = int(div[3])
-                        msg.current = int(div[1])
+                        msg.current = float(div[1])
                         self.publisher_motor_front.publish(msg)
 
                         msg = Motor()
                         msg.tick = int(div[4])
-                        msg.current = int(div[2])
+                        msg.current = float(div[2])
                         self.publisher_motor_rear.publish(msg)
+
+                        #print('c='+ str(self.count) + ', lines='+ str(len(lines)))
+                        #self.count += 1
 
                     except ValueError:
                         print('error')
                         pass
 
-            buf = '' if len(div) == 12 and div[0] == 'VEDRUS' and div[ len(div) - 1 ] == 'END' else lines[ len(lines) - 1 ]
+            self.buf = '' if len(div) == 12 and (div[0] == 'VEDL' or div[0] == 'VEDR') and div[ len(div) - 1 ] == 'END' else lines[ len(lines) - 1 ]
 
 
 def main(args=None):
     rclpy.init(args=args)
 
-    vedrus_left_node = VedrusLeftNode()
-    rclpy.spin(vedrus_left_node)
+    vedrus_ardu_node = VedrusArduNode()
+    rclpy.spin(vedrus_ardu_node)
 
-    vedrus_left_node.destroy_node()
+    vedrus_ardu_node.destroy_node()
     rclpy.shutdown()
 
 if __name__ == '__main__':
