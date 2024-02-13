@@ -20,18 +20,17 @@ class VedrusArduNode(Node):
     start = None
 
     def move_motor(self, msg):
-        buf = [ord('c')]
-        buf.append(ord('b') if msg.breaking else ord('m'))
+        bytes = [ord('c')]
+        bytes.append(ord('b') if msg.breaking else ord('m'))
 
         if self.side == 'left':
-            buf.append(ord('f') if msg.forward else ord('r'))
+            bytes.append(ord('f') if msg.forward else ord('r'))
         else:
-            buf.append(ord('r') if msg.forward else ord('f'))
+            bytes.append(ord('r') if msg.forward else ord('f'))
 
-        buf.append(msg.power)
+        bytes.append(int(msg.power))
 
-        print(msg)
-        self.ser.write(buf)
+        self.ser.write(bytes)
 
     def __init__(self):
         super().__init__('vedrus_ardu')

@@ -1,8 +1,10 @@
 <launch>
-  <node pkg="vedrus" exec="ardu" output="screen">
+  <node pkg="vedrus" exec="ardu" emulate_tty="True" output="screen">
     <param name="device" value="/dev/ttyUSB0"/>
   </node>
-  <node pkg="vedrus" exec="ardu" output="screen">
+  <node pkg="vedrus" exec="ardu" emulate_tty="True" output="screen">
     <param name="device" value="/dev/ttyUSB1"/>
   </node>
+  <node pkg="vedrus" exec="gyro" emulate_tty="True" output="screen"/>
+  <node pkg="vedrus" exec="controller" emulate_tty="True" output="screen"/>
 </launch>

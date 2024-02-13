@@ -21,6 +21,8 @@ setup(
     entry_points={
         'console_scripts': [
             'ardu = vedrus.ardu:main',
+            'gyro = vedrus.gyro:main',
+            'controller = vedrus.controller:main',
             'test = vedrus.test:main'
         ],
     },

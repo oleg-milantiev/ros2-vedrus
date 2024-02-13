@@ -1,6 +1,8 @@
 cd /opt/ros/iron
-colcon build --packages-select vedrus vedrus_interfaces
+colcon build --symlink-install --packages-select vedrus vedrus_interfaces
 source /opt/ros/iron/install/local_setup.bash
+ros2 launch launch/vedrus_launch.xml
+#ros2 run vedrus ardu
+
+pip3 install getch # keyboard controller
 apt-get install -y python3-serial
-ros2 run vedrus ardu
-pip3 install getch
