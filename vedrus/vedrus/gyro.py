@@ -8,7 +8,7 @@ class AccelNode(Node):
         super().__init__('accel_node')
         self.publisher = self.create_publisher(Imu, '/vedrus/input/remote', 10)
 
-        self.serial_port = serial.Serial('/dev/ttyUSB2', 115200)
+        self.serial_port = serial.Serial('/dev/ttyUSB0', 115200)
         self.accel_data = Imu()
 
         while rclpy.ok():
