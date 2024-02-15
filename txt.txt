@@ -6,3 +6,17 @@ ros2 launch launch/vedrus_launch.xml
 
 pip3 install getch # keyboard controller
 apt-get install -y python3-serial
+
+
+
+# build realsense
+cd /opt/ros/iron
+git clone ..
+cd librealsense
+mkdir build
+cd build
+cmake .. -DBUILD_EXAMPLES=false
+make
+
+#add to Dockerfile
+    -DPYTHON_EXECUTABLE=/usr/bin/python3 \
