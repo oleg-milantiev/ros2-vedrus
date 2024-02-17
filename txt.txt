@@ -62,3 +62,15 @@ curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null
 apt install ros-dev-tools
 apt install ros-iron-desktop
+
+apt install ros-iron-realsense2-camera
+#https://github.com/IntelRealSense/realsense-ros?tab=readme-ov-file#installation
+ros2 run realsense2_camera realsense2_camera_node
+rs-enumerate-devices <- поддерживаемые режимы (в т.ч. fps)
+ros2 run realsense2_camera realsense2_camera_node --ros-args -p enable_color:=false -p enable_infra1:=false -p enable_infra2:=false -p enable_gyro:=true -p enable_accel:=true -p enable_depth:=true -p depth_module.profile:=640x480x6
+
+
+apt install ros-iron-usb-cam
+#https://github.com/ros-drivers/usb_cam/tree/ros2
+ros2 run usb_cam usb_cam_node_exe --ros-args -p video_device:=/dev/video6 -p image_width:=640 -p framerate:=6.0
+#https://github.com/ros-drivers/usb_cam/blob/ros2/config/params_1.yaml
