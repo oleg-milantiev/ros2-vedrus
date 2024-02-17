@@ -9,14 +9,38 @@ apt-get install -y python3-serial
 
 
 
-# build realsense
+
+
+#cv_bridge
+#https://github.com/ros-perception/vision_opencv.git
+
+
+#diagnostic_updater
+https://github.com/ros/diagnostics.git
+
+
+apt update
+apt upgrade
 cd /opt/ros/iron
-git clone ..
+source /opt/ros/iron/install/local_setup.bash
+rosdep update
+rosdep install --from-paths src --ignore-src -r -y
+
+#xacro mount to src
+https://github.com/ros2-gbp/xacro-release
+cd src/xacro
+python3 setup.py install
+
+#librealsense
+apt install libssl-dev libusb-1.0-0-dev pkg-config libgtk-3-dev libglfw3-dev libgl1-mesa-dev libglu1-mesa-dev
+git clone https://github.com/IntelRealSense/librealsense
 cd librealsense
 mkdir build
 cd build
-cmake .. -DBUILD_EXAMPLES=false
-make
+cmake .. -DBUILD_GRAPHICAL_EXAMPLES=OFF -DBUILD_PYTHON_BINDINGS:bool=true -DCMAKE_BUILD_TYPE=Release
+make -j4 all
+make install
 
-#add to Dockerfile
-    -DPYTHON_EXECUTABLE=/usr/bin/python3 \
+#realsense-ros
+#https://github.com/IntelRealSense/realsense-ros.git
+colcon build --symlink-install --packages-select realsense2_camera realsense2_camera_msgs realsense2_description cv_bridge diagnostic_updater librealsense2
