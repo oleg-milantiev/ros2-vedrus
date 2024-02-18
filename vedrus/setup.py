@@ -15,7 +15,7 @@ setup(
     zip_safe=True,
     maintainer='Oleg Milantiev',
     maintainer_email='oleg@milantiev.com',
-    description='Vedrus bot package',
+    description='Vedrusohod bot package',
     license='Apache-2.0',
     tests_require=['pytest'],
     entry_points={

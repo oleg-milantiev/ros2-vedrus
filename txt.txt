@@ -74,3 +74,6 @@ apt install ros-iron-usb-cam
 #https://github.com/ros-drivers/usb_cam/tree/ros2
 ros2 run usb_cam usb_cam_node_exe --ros-args -p video_device:=/dev/video6 -p image_width:=640 -p framerate:=6.0
 #https://github.com/ros-drivers/usb_cam/blob/ros2/config/params_1.yaml
+
+apt install python3-pip
+python3 -m pip install setuptools==58.2.0

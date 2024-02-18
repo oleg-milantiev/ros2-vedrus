@@ -1,0 +1,4 @@
+ros2 pkg create --description "Vedrusohod bot package" --license "Apache-2.0" --build-type ament_python --maintainer-email "oleg@milantiev.com" --maintainer-name "Oleg Milantiev" --node-name ardu vedrus
+source /opt/ros/iron/setup.bash
+colcon build --packages-ignore ament_lint ament_flake8 ament_pep257 ament_copyright --symlink-install --packages-select vedrus
+source /opt/ros/iron/install/local_setup.bash
