@@ -34,4 +34,6 @@ ln -s `pwd`/launch.sh /opt/ros/iron/launch.sh
 ln -s `pwd`/launch /opt/ros/iron/launch
 ln -s `pwd`/vedrus /opt/ros/iron/src/vedrus
 ln -s `pwd`/vedrus_interfaces /opt/ros/iron/src/vedrus_interfaces
+ln -s `pwd`/yolov8_rknn /opt/ros/iron/src/yolov8_rknn
+ln -s `pwd`/yolov8_interfaces /opt/ros/iron/src/yolov8_interfaces
 ln -s `pwd`/build.sh /opt/ros/iron/build.sh

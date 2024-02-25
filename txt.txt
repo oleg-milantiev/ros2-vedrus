@@ -114,9 +114,3 @@ ros2 launch realsense2_camera rs_launch.py depth_module.profile:=424x240x6 point
 startx
 tigervncserver -localhost no
 0.0.0.0:5901 / линь
-
-
-# using RK3566 NPU
-cd /opt
-git clone https://github.com/rockchip-linux/rknn-toolkit2.git
-python3 -m pip install /opt/rknn-toolkit2/rknn_toolkit_lite2/packages/rknn_toolkit_lite2-1.6.0-cp310-cp310-linux_aarch64.whl
