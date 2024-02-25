@@ -77,3 +77,46 @@ ros2 run usb_cam usb_cam_node_exe --ros-args -p video_device:=/dev/video6 -p ima
 
 apt install python3-pip
 python3 -m pip install setuptools==58.2.0
+
+
+
+
+/sys/class/video4linux тут все вебки по имени. Например, video9/name - это a4tech
+v4l2-ctl --list-devices
+Intel(R) RealSense(TM) Depth Ca (usb-xhci-hcd.4.auto-1.1):
+        /dev/video0
+        /dev/video1
+        /dev/video2
+        /dev/video3
+        /dev/video4
+        /dev/video5
+        /dev/media0
+        /dev/media1
+
+A4 TECH USB2.0 PC Camera J: A4  (usb-xhci-hcd.4.auto-1.4.3):
+        /dev/video6
+        /dev/video7
+        /dev/media2
+
+A4 TECH USB2.0 PC Camera J: A4  (usb-xhci-hcd.4.auto-1.4.4):
+        /dev/video8
+        /dev/video9
+        /dev/media3
+
+v4l2-ctl -d /dev/video9 --all
+
+
+https://github.com/IntelRealSense/realsense-ros
+ros2 launch realsense2_camera rs_launch.py depth_module.profile:=424x240x6 pointcloud.enable:=true rgb_camera.profile:=424x240x6
+
+#vnc
+
+startx
+tigervncserver -localhost no
+0.0.0.0:5901 / линь
+
+
+# using RK3566 NPU
+cd /opt
+git clone https://github.com/rockchip-linux/rknn-toolkit2.git
+python3 -m pip install /opt/rknn-toolkit2/rknn_toolkit_lite2/packages/rknn_toolkit_lite2-1.6.0-cp310-cp310-linux_aarch64.whl

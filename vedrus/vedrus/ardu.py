@@ -50,7 +50,10 @@ class VedrusArduNode(Node):
     def read_serial(self):
         if self.ser.in_waiting > 0:
             # b'141,65,21.24,45.52,735.97,22,END\r\nVEDRUS,0,0,1,1,140,66,21.24,45.52,735.97,27,END\r\nVEDRUS,15,18,1,1,140,66,21.24,45.50,735.97,42,END\r\nVEDRUS,11,0,1,1,140,65,21.24,45.50,735.97,27,END\r\nVEDRUS,0,0,1,1,'
-            self.buf += self.ser.read(self.ser.in_waiting).decode('utf-8')
+            try:
+                self.buf += self.ser.read(self.ser.in_waiting).decode('ascii')
+            except:
+                pass
 
             #['141,65,21.24,45.52,735.97,22,END', 'VEDRUS,312,299,1,1,141,66,21.29,45.39,736.10,162,END', 'VEDRUS,140,134,1,1,141,67,21.29,45.39,736.10,128,END', 'VEDRU']
             lines = self.buf.split('\r\n')
