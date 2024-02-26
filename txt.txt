@@ -114,3 +114,13 @@ ros2 launch realsense2_camera rs_launch.py depth_module.profile:=424x240x6 point
 startx
 tigervncserver -localhost no
 0.0.0.0:5901 / линь
+
+
+
+apt install influxdb influxdb-client python3-influxdb
+# influx
+create database r2
+use r2
+create user r2 with password 'r2'
+GRANT ALL PRIVILEGES TO r2
+select value from temperature where time > now() - 4d group by location

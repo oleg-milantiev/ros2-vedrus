@@ -18,13 +18,8 @@ bridge = CvBridge()
 
 '''
 TODO:
-- массив параметров камер. В каждом элементе
--- очередь image_raw камеры;
--- очередь публикатора;
--- раз в N кадров солвить
+- нет никакой проверки входных параметров!
 '''
-
-CLASSES = ("alex", "bars", "dad", "fish", "ivan", "marta", "max", "mom", "oleg", "poly", "turtle", "yury")
 
 class YOLOv8_solver(Node):
 
@@ -34,33 +29,48 @@ class YOLOv8_solver(Node):
 		self.declare_parameters(
 			namespace='',
 			parameters=[
+				('classes', rclpy.Parameter.Type.STRING_ARRAY),
 				('model', rclpy.Parameter.Type.STRING),
-				('camera_raw_topic', rclpy.Parameter.Type.STRING),
+				('camera_ids', rclpy.Parameter.Type.STRING_ARRAY),
+				('camera_rates', rclpy.Parameter.Type.INTEGER_ARRAY),
+				('camera_raw_topics', rclpy.Parameter.Type.STRING_ARRAY),
 				('inference_topic', rclpy.Parameter.Type.STRING),
-				('rate', rclpy.Parameter.Type.INTEGER),
 			]
 		)
 
+		self.classes = self.get_parameter('classes').get_parameter_value().string_array_value
+		self.cameras = self.get_parameter('camera_ids').get_parameter_value().string_array_value
+
 		self.yolov8_inference = Yolov8Inference()
 
-		self.subscription = self.create_subscription(
-			Image,
-			self.get_parameter('camera_raw_topic').get_parameter_value().string_value,
-			self.camera_callback,
-			10)
-		self.subscription 
+		topics = self.get_parameter('camera_raw_topics').get_parameter_value().string_array_value
+
+		for i in range(len(topics)):
+			self.create_subscription(
+				Image,
+				topics[i],
+				lambda msg, i=i: self.camera_callback(msg, i),
+				10)
 
 		self.yolov8_pub = self.create_publisher(Yolov8Inference, self.get_parameter('inference_topic').get_parameter_value().string_value, 1)
 
-		self.rate = self.get_parameter('rate').get_parameter_value()
-		print('rate=')
-		print(self.rate)
+		self.ratesInit = self.get_parameter('camera_rates').get_parameter_value().integer_array_value
+		self.rates = self.ratesInit[:]
 
 		self.rknn = RKNNLite()
 		self.rknn.load_rknn(self.get_parameter('model').get_parameter_value().string_value)
 		self.rknn.init_runtime()
 
-	def camera_callback(self, data):
+	def camera_callback(self, data, camera):
+		#print('camera={}, rates={}, init={}'.format(camera, self.rates[camera], self.ratesInit[camera]))
+
+		self.rates[camera] -= 1
+
+		if self.rates[camera] != 0:
+			return
+
+		self.rates[camera] = self.ratesInit[camera]
+
 		img = bridge.imgmsg_to_cv2(data, 'bgr8')
 
 		#if img.shape[0] > 640 or img.shape[0] > 640:
@@ -75,8 +85,7 @@ class YOLOv8_solver(Node):
 			frame[y_offset:y_offset+img.shape[0], x_offset:x_offset+img.shape[1]] = img
 			img = frame
 
-		#cv2.imwrite('/a.jpg', img)
-		#sys.exit()
+		#cv2.imwrite('/'+ str(camera) +'.jpg', img)
 		results = self.rknn.inference(inputs=[img])
 
 		#OBJ_THRESH = 0.25
@@ -84,11 +93,7 @@ class YOLOv8_solver(Node):
 		OBJ_THRESH = 0.1
 		NMS_THRESH = 0.65
 
-
 		IMG_SIZE = (640, 640)  # (width, height), such as (1280, 736)
-
-		CLASSES = ("alex", "bars", "dad", "fish", "ivan", "marta", "max", "mom", "oleg", "poly", "turtle", "yury")
-		coco_id_list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
 
 		def filter_boxes(boxes, box_confidences, box_class_probs):
 			"""Filter boxes with object threshold.
@@ -242,14 +247,14 @@ class YOLOv8_solver(Node):
 		print(scores)
 		'''
 
-		self.yolov8_inference.header.frame_id = 'inference'
+		self.yolov8_inference.header.frame_id = self.cameras[camera]
 		self.yolov8_inference.header.stamp = self.get_clock().now().to_msg()
 
 		if boxes is not None:
 			for i in range(len(boxes)):
 				self.inference_result = InferenceResult()
 				self.inference_result.score = float(scores[i])
-				self.inference_result.class_name = CLASSES[classes[i]]
+				self.inference_result.class_name = self.classes[classes[i]]
 				self.inference_result.top = int(boxes[i][0])
 				self.inference_result.left = int(boxes[i][1])
 				self.inference_result.bottom = int(boxes[i][2])
