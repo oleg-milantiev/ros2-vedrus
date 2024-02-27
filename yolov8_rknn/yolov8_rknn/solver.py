@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import torch
 import rclpy
 from rclpy.node import Node
 from cv_bridge import CvBridge
@@ -11,8 +10,6 @@ from rknnlite.api import RKNNLite
 
 from yolov8_interfaces.msg import InferenceResult, Yolov8Inference
 import cv2
-
-import sys
 
 bridge = CvBridge()
 
@@ -162,6 +159,7 @@ class YOLOv8_solver(Node):
 			return y
 
 		def dfl_torch(position):
+			import torch
 			# Distribution Focal Loss (DFL)
 			x = torch.tensor(position)
 			n,c,h,w = x.shape

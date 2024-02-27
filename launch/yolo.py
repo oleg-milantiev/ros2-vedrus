@@ -42,7 +42,38 @@ def generate_launch_description():
                 {'enable_infra2': False},
                 {'depth_module.profile': '640x480x6'},
                 {'rgb_camera.profile': '640x480x6'},
-                {'pointcloud.enable': True},
+#                {'pointcloud.enable': True},
             ]
-        )
+        ),
+        Node(
+            package='vedrus',
+            executable='ardu',
+            output='screen',
+            emulate_tty=True,
+            parameters=[
+                {'device': '/dev/ttyUSB0'},
+            ]
+        ),
+        Node(
+            package='influx',
+            executable='logger',
+            output='screen',
+            emulate_tty=True,
+            parameters=[
+                {'host': 'localhost'},
+                {'port': 8086},
+                {'user': 'r2'},
+                {'password': 'r2'},
+                {'database': 'r2'},
+            ]
+        ),
+        Node(
+            package='vedrus',
+            executable='ardu',
+            output='screen',
+            emulate_tty=True,
+            parameters=[
+                {'device': '/dev/ttyUSB1'},
+            ]
+        ),
     ])
