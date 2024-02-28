@@ -6,7 +6,7 @@
 // - 
 
 //#define DEBUG
-//#define LEFT
+#define LEFT
 
 // bme280
 #include <Wire.h>
@@ -36,7 +36,7 @@ NewPing sonar2(A2, 5, 200);
 #define CURRENT2 A6
 #define CURRENT_SYS A3
 
-unsigned status;
+unsigned bme_status;
 
 void setup() {
   Serial.begin(115200);
@@ -57,10 +57,10 @@ void setup() {
 
   attachInterrupt(digitalPinToInterrupt(BLDC1_INT), speed1, RISING);
   attachInterrupt(digitalPinToInterrupt(BLDC2_INT), speed2, RISING);
-  
+
   // bme280
-  
-  status = bme.begin(0x76);
+
+  bme_status = bme.begin(0x76);
 }
 
 int speed_1 = 0;
@@ -82,14 +82,14 @@ byte dir = 0;   // move|break direction [0 = cw; 1 = ccw]
 void loop() { 
   while (Serial.available()) {
     byte ch = Serial.read();
-  
+
     switch (commandStage) {
       case 0:
         if (ch == 'c') {
           commandStage = 1;
         }
         break;
-  
+
       case 1:
         command = ch;
 
@@ -115,7 +115,7 @@ void loop() {
                 commandStage = 3;
                 dir = (ch == 'f');
                 break;
-    
+
               default:
                 commandStage = 0;
             }
@@ -142,27 +142,21 @@ void loop() {
     Serial.print(", power = ");
     Serial.println(power);
 
-    digitalWrite(BLDC1_DIR, dir);
-    digitalWrite(BLDC2_DIR, dir);
-  
-    digitalWrite(BLDC1_BRK, mode == 'b');
-    digitalWrite(BLDC2_BRK, mode == 'b');
-  
-    analogWrite(BLDC1_PWM, power);
-    analogWrite(BLDC2_PWM, power);
-  
   #else
     digitalWrite(BLDC1_DIR, dir);
     digitalWrite(BLDC2_DIR, dir);
-  
+
     digitalWrite(BLDC1_BRK, mode == 'b');
     digitalWrite(BLDC2_BRK, mode == 'b');
-  
+
     analogWrite(BLDC1_PWM, power);
     analogWrite(BLDC2_PWM, power);
   #endif
-  
+
   // status
+  // VEDX,current1,current2,speed1,speed2,sonar1,sonar2,bme:temp,bme:hum,bme:pres,current_sys,power,dir,END
+  // VEDR,253.06  ,261.94  ,0     ,0     ,-1    ,-1    ,0       ,0      ,0       ,253.81     ,0    ,0  ,END
+
   int current, i, j;
 
   #ifdef LEFT
@@ -184,7 +178,7 @@ void loop() {
   }
   Serial.print(current / 16.);
   Serial.print(",");
-  
+
   Serial.print(speed_1);
   Serial.print(",");
   Serial.print(speed_2);
@@ -199,31 +193,35 @@ void loop() {
       j++;
     }
   }
-//  Serial.print(current / j);
-  Serial.print(power);
+  Serial.print(current / j);
   Serial.print(",");
 
   current = j = 0;
   for (i = 0; i < 4; i++) {
-    int cm = sonar1.ping();
+    int cm = sonar2.ping();
 
     if (cm > 0) {
       current += cm;
       j++;
     }
   }
-  //Serial.print(current / j);
-  Serial.print(dir);
-  Serial.print(",");
-  
-  Serial.print(bme.readTemperature());
+  Serial.print(current / j);
   Serial.print(",");
 
-  Serial.print(bme.readHumidity());
-  Serial.print(",");
+  if (bme_status) {
+    Serial.print(bme.readTemperature());
+    Serial.print(",");
 
-  Serial.print(bme.readPressure() * 0.0075);
-  Serial.print(",");
+    Serial.print(bme.readHumidity());
+    Serial.print(",");
+
+    Serial.print(bme.readPressure() * 0.0075);
+    Serial.print(",");
+  }
+  else {
+    // no bme
+    Serial.print("0,0,0,");
+  }
 
   // отправка как есть. Наверху разбираться вольты это (0..1024) или амперы
   current = 0;
@@ -231,5 +229,12 @@ void loop() {
     current += analogRead(CURRENT_SYS);
   }
   Serial.print(current / 16.);
+  Serial.print(",");
+
+  Serial.print(power);
+  Serial.print(",");
+
+  Serial.print(dir);
+
   Serial.println(",END");
 }
