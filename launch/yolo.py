@@ -40,6 +40,7 @@ def generate_launch_description():
                 {'enable_color': True},
                 {'enable_infra1': False},
                 {'enable_infra2': False},
+                {'hole_filling_filter.enable': True},
                 {'depth_module.profile': '640x480x6'},
                 {'rgb_camera.profile': '640x480x6'},
 #                {'pointcloud.enable': True},
