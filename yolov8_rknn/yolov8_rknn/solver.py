@@ -2,6 +2,7 @@
 
 import rclpy
 from rclpy.node import Node
+from datetime import datetime
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 import numpy as np
@@ -15,8 +16,14 @@ bridge = CvBridge()
 
 '''
 TODO:
-- нет никакой проверки входных параметров!
+- проверка входных параметров, включая размер изображения
+- IMG_PUBLISH_TOPIC в необязательный параметр
 '''
+
+#IMG_PUBLISH_TOPIC = '/yolov8/img_out'
+
+IMG_SAVE_PATH = '/opt/ros/iron/log/'
+
 
 class YOLOv8_solver(Node):
 
@@ -30,13 +37,18 @@ class YOLOv8_solver(Node):
 				('model', rclpy.Parameter.Type.STRING),
 				('camera_ids', rclpy.Parameter.Type.STRING_ARRAY),
 				('camera_rates', rclpy.Parameter.Type.INTEGER_ARRAY),
+				('save_image_rates', []),
 				('camera_raw_topics', rclpy.Parameter.Type.STRING_ARRAY),
 				('inference_topic', rclpy.Parameter.Type.STRING),
+				('obj_threshold', 0.35),
+				('nms_threshold', 0.65),
 			]
 		)
 
 		self.classes = self.get_parameter('classes').get_parameter_value().string_array_value
 		self.cameras = self.get_parameter('camera_ids').get_parameter_value().string_array_value
+		self.obj_threshold = self.get_parameter('obj_threshold').get_parameter_value().double_value
+		self.nms_threshold = self.get_parameter('nms_threshold').get_parameter_value().double_value
 
 		self.yolov8_inference = Yolov8Inference()
 
@@ -54,13 +66,22 @@ class YOLOv8_solver(Node):
 		self.ratesInit = self.get_parameter('camera_rates').get_parameter_value().integer_array_value
 		self.rates = self.ratesInit[:]
 
+		self.saveRatesInit = self.get_parameter('save_image_rates').get_parameter_value().integer_array_value
+		self.saveRates = self.saveRatesInit[:]
+
 		self.rknn = RKNNLite()
 		self.rknn.load_rknn(self.get_parameter('model').get_parameter_value().string_value)
 		self.rknn.init_runtime()
 
-	def camera_callback(self, data, camera):
-		#print('camera={}, rates={}, init={}'.format(camera, self.rates[camera], self.ratesInit[camera]))
+		# TBD вторую модель в необязательный параметр
+		#self.rknn2 = RKNNLite()
+		#self.rknn2.load_rknn('/opt/ros/iron/family.rknn')
+		#self.rknn2.init_runtime()
 
+		if 'IMG_PUBLISH_TOPIC' in globals():
+			self.publisher_img = self.create_publisher(Image, IMG_PUBLISH_TOPIC, 10)
+
+	def camera_callback(self, data, camera):
 		self.rates[camera] -= 1
 
 		if self.rates[camera] != 0:
@@ -82,15 +103,17 @@ class YOLOv8_solver(Node):
 			frame[y_offset:y_offset+img.shape[0], x_offset:x_offset+img.shape[1]] = img
 			img = frame
 
-		#cv2.imwrite('/'+ str(camera) +'.jpg', img)
+		if len(self.saveRates) > 0:
+			self.saveRates[camera] -= 1
+
+			if self.saveRates[camera] == 0:
+				cv2.imwrite(IMG_SAVE_PATH + self.cameras[camera] +'-'+ datetime.fromtimestamp(self.get_clock().now().to_msg().sec).strftime('%Y%m%d-%H%M%S') +'.jpg', img)
+
+				self.saveRates[camera] = self.saveRatesInit[camera]
+
 		results = self.rknn.inference(inputs=[img])
 
-		#OBJ_THRESH = 0.25
-		#NMS_THRESH = 0.45
-		OBJ_THRESH = 0.1
-		NMS_THRESH = 0.65
-
-		IMG_SIZE = (640, 640)  # (width, height), such as (1280, 736)
+		IMG_SIZE = (640, 640)
 
 		def filter_boxes(boxes, box_confidences, box_class_probs):
 			"""Filter boxes with object threshold.
@@ -101,7 +124,7 @@ class YOLOv8_solver(Node):
 			class_max_score = np.max(box_class_probs, axis=-1)
 			classes = np.argmax(box_class_probs, axis=-1)
 
-			_class_pos = np.where(class_max_score* box_confidences >= OBJ_THRESH)
+			_class_pos = np.where(class_max_score* box_confidences >= self.obj_threshold)
 			scores = (class_max_score* box_confidences)[_class_pos]
 
 			boxes = boxes[_class_pos]
@@ -137,7 +160,7 @@ class YOLOv8_solver(Node):
 				inter = w1 * h1
 
 				ovr = inter / (areas[i] + areas[order[1:]] - inter)
-				inds = np.where(ovr <= NMS_THRESH)[0]
+				inds = np.where(ovr <= self.nms_threshold)[0]
 				order = order[inds + 1]
 			keep = np.array(keep)
 			return keep
@@ -158,19 +181,6 @@ class YOLOv8_solver(Node):
 
 			return y
 
-		def dfl_torch(position):
-			import torch
-			# Distribution Focal Loss (DFL)
-			x = torch.tensor(position)
-			n,c,h,w = x.shape
-			p_num = 4
-			mc = c//p_num
-			y = x.reshape(n,p_num,mc,h,w)
-			y = y.softmax(2)
-			acc_metrix = torch.tensor(range(mc)).float().reshape(1,1,mc,1,1)
-			y = (y*acc_metrix).sum(2)
-			return y.numpy()
-
 		def box_process(position):
 			grid_h, grid_w = position.shape[2:4]
 			col, row = np.meshgrid(np.arange(0, grid_w), np.arange(0, grid_h))
@@ -180,7 +190,6 @@ class YOLOv8_solver(Node):
 			stride = np.array([IMG_SIZE[1]//grid_h, IMG_SIZE[0]//grid_w]).reshape(1,2,1,1)
 
 			position = dfl(position)
-#			position = dfl_torch(position)
 			box_xy  = grid +0.5 -position[:,0:2,:,:]
 			box_xy2 = grid +0.5 +position[:,2:4,:,:]
 			xyxy = np.concatenate((box_xy*stride, box_xy2*stride), axis=1)
@@ -253,14 +262,20 @@ class YOLOv8_solver(Node):
 				self.inference_result = InferenceResult()
 				self.inference_result.score = float(scores[i])
 				self.inference_result.class_name = self.classes[classes[i]]
-				self.inference_result.top = int(boxes[i][0])
-				self.inference_result.left = int(boxes[i][1])
-				self.inference_result.bottom = int(boxes[i][2])
-				self.inference_result.right = int(boxes[i][3])
+				self.inference_result.left = int(boxes[i][0])
+				self.inference_result.top = int(boxes[i][1])
+				self.inference_result.right = int(boxes[i][2])
+				self.inference_result.bottom = int(boxes[i][3])
 				self.yolov8_inference.yolov8_inference.append(self.inference_result)
+
+				if 'IMG_PUBLISH_TOPIC' in globals():
+					img = cv2.rectangle(img, (self.inference_result.top, self.inference_result.left), (self.inference_result.bottom, self.inference_result.right), (0, 0, 255), 2)
 
 			self.yolov8_pub.publish(self.yolov8_inference)
 			self.yolov8_inference.yolov8_inference.clear()
+
+			if 'IMG_PUBLISH_TOPIC' in globals():
+				self.publisher_img.publish(bridge.cv2_to_imgmsg(img, encoding='bgr8'))
 
 def main(args=None):
 	rclpy.init(args=args)

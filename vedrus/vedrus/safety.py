@@ -15,10 +15,19 @@ from scipy.ndimage import center_of_mass, label
 MAX_X = 160
 MAX_Y = 120
 
-FOV_X_HALF = 87. / 2.
+#TBD читать из инфо камеры
+CAMERA_AZIMUTH = {
+	'front': 0.,
+	'back': 180.,
+	}
+CAMERA_FOV = {
+	'front': 87.,
+	'back': 80.,
+	}
 
 #DEPTH_PUBLISH_TOPIC = '/img_out'
 
+#TBD
 #YOLO_RANGE_ALARM = {
 #	'max': 
 #	}
@@ -30,26 +39,35 @@ class SafetyNode(Node):
 		self.create_subscription(
 			Image,
 			'/depth/image_rect_raw',
-			self.camera_callback,
+			self.depth_camera_callback,
 			10)
 		self.create_subscription(
 			Sonar,
 			'/vedrus/sonar',
 			self.sonar_callback,
 			10)
-#		self.create_subscription(
-#			Yolov8Inference,
-#			'/yolov8/inference',
-#			self.yolo_callback,
-#			10)
+		self.create_subscription(
+			Yolov8Inference,
+			'/yolov8/inference',
+			self.yolo_callback,
+			10)
 
 		self.publisher_safety = self.create_publisher(Safety, '/vedrus/safety', 10)
 
 		if 'DEPTH_PUBLISH_TOPIC' in globals():
 			self.publisher_depth = self.create_publisher(Image, DEPTH_PUBLISH_TOPIC, 10)
 
-#	def yolo_callback(self, data):
-#		
+	def yolo_callback(self, data):
+		for inference in data.yolov8_inference:
+			if inference.class_name in ['person', 'dog', 'cat', 'car']:
+				msg = Safety()
+				msg.header.frame_id = 'yolo'
+				msg.header.stamp = self.get_clock().now().to_msg()
+				msg.alarm = False
+				msg.warning = True
+				msg.range = 100. # TBD через размер бокса, в зависимости от класса
+				msg.azimuth = self.az360((((inference.right - inference.left) / 2. + inference.left - 320.) / 320.) * CAMERA_FOV[data.header.frame_id] / 2. + CAMERA_AZIMUTH[data.header.frame_id])
+				self.publisher_safety.publish(msg)
 
 	def sonar_callback(self, data):
 		if 0. < data.range < 100.:
@@ -62,7 +80,7 @@ class SafetyNode(Node):
 			msg.azimuth = data.azimuth
 			self.publisher_safety.publish(msg)
 
-	def camera_callback(self, data):
+	def depth_camera_callback(self, data):
 		def rebin(a, shape):
 			sh = shape[0],a.shape[0]//shape[0],shape[1],a.shape[1]//shape[1]
 			return a.reshape(sh).mean(-1).mean(1)
@@ -107,7 +125,7 @@ class SafetyNode(Node):
 			msg.alarm = True
 			msg.warning = False
 			msg.range = 50. # TBD калибрануть Z
-			msg.azimuth = (c[1] * 2. / float(MAX_X) - 1.) * FOV_X_HALF # TBD 0..360
+			msg.azimuth = self.az360((c[1] * 2. / float(MAX_X) - 1.) * CAMERA_FOV['front'] / 2)
 			self.publisher_safety.publish(msg)
 			arr[int(c[0]),int(c[1])] = 250
 
@@ -120,13 +138,15 @@ class SafetyNode(Node):
 			msg.alarm = False
 			msg.warning = True
 			msg.range = 100. # TBD калибрануть Z
-			msg.azimuth = (c[1] * 2. / float(MAX_X) - 1.) * FOV_X_HALF # TBD 0..360
+			msg.azimuth = self.az360((c[1] * 2. / float(MAX_X) - 1.) * CAMERA_FOV['front'] / 2)
 			self.publisher_safety.publish(msg)
 			arr[int(c[0]),int(c[1])] = 150
 
 		if 'DEPTH_PUBLISH_TOPIC' in globals():
 			self.publisher_depth.publish(bridge.cv2_to_imgmsg(arr.astype('uint8'), encoding='mono8'))
 
+	def az360(self, azimuth):
+		return azimuth + 360 if azimuth < 0 else azimuth;
 
 def main(args=None):
 	rclpy.init(args=args)
