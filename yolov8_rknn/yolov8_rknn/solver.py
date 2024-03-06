@@ -269,7 +269,7 @@ class YOLOv8_solver(Node):
 				self.yolov8_inference.yolov8_inference.append(self.inference_result)
 
 				if 'IMG_PUBLISH_TOPIC' in globals():
-					img = cv2.rectangle(img, (self.inference_result.top, self.inference_result.left), (self.inference_result.bottom, self.inference_result.right), (0, 0, 255), 2)
+					img = cv2.rectangle(img, (self.inference_result.left, self.inference_result.top), (self.inference_result.right, self.inference_result.bottom), (0, 0, 255), 2)
 
 			self.yolov8_pub.publish(self.yolov8_inference)
 			self.yolov8_inference.yolov8_inference.clear()
