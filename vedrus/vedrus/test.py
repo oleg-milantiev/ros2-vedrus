@@ -34,7 +34,8 @@ class VedrusTestNode(Node):
                 msg = MotorMove()
                 msg.breaking = False
                 msg.forward = self.left >= 0
-                msg.power = abs(self.left) * 1 # WTF!!!!??? :)))
+                msg.power1 = abs(self.left) * 1 # WTF!!!!??? :)))
+                msg.power2 = abs(self.left) * 1 # WTF!!!!??? :)))
 
                 print('Left')
                 print(msg)
@@ -44,7 +45,8 @@ class VedrusTestNode(Node):
                 msg = MotorMove()
                 msg.breaking = False
                 msg.forward = self.right >= 0
-                msg.power = abs(self.right) * 1 # WTF!!!!??? :)))
+                msg.power1 = abs(self.right) * 1 # WTF!!!!??? :)))
+                msg.power2 = abs(self.right) * 1 # WTF!!!!??? :)))
 
                 print('Right')
                 print(msg)

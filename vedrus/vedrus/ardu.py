@@ -29,7 +29,8 @@ class VedrusArduNode(Node):
 		else:
 			bytes.append(ord('r') if msg.forward else ord('f'))
 
-		bytes.append(int(msg.power))
+		bytes.append(int(msg.power1))
+		bytes.append(int(msg.power2))
 
 		self.ser.write(bytes)
 
@@ -59,7 +60,7 @@ class VedrusArduNode(Node):
 			div = self.line.split(',')
 			self.line = None
 
-			if len(div) == 14 and (div[0] == 'VEDR' or div[0] == 'VEDL') and div[ len(div) - 1 ] == 'END':
+			if len(div) == 15 and (div[0] == 'VEDR' or div[0] == 'VEDL') and div[ len(div) - 1 ] == 'END':
 				if self.side is None:
 					self.side = 'left' if div[0] == 'VEDL' else 'right'
 					self.start = div[0]
@@ -79,10 +80,10 @@ class VedrusArduNode(Node):
 
 					self.publisher_raw = self.create_publisher(String, 'vedrus/'+ self.side +'/raw', 10)
 
-			if self.side is not None and len(div) == 14 and div[0] == self.start and div[ len(div) - 1 ] == 'END':
+			if self.side is not None and len(div) == 15 and div[0] == self.start and div[ len(div) - 1 ] == 'END':
 
 				try:
-					#[0'VEDR', 1'196.88', 2'210.56', 3'0', 4'0', 5'2882', 6'-1', 7'0', 8'0', 9'0', 10'205.50', 11'0', 12'0', 'END']
+					#[0'VEDR', 1'196.88', 2'210.56', 3'0', 4'0', 5'2882', 6'-1', 7'0', 8'0', 9'0', 10'205.50', 11'0', 12'0', 13'0', 'END']
 					stamp = self.get_clock().now().to_msg()
 
 					msg = Temperature()
@@ -115,7 +116,7 @@ class VedrusArduNode(Node):
 					msg.tick = int(div[3])
 					msg.current = float(div[1])
 					msg.power = int(div[11])
-					msg.forward = div[12] == '1'
+					msg.forward = div[13] == '1'
 					self.publisher_motor.publish(msg)
 
 					msg = Motor()
@@ -123,8 +124,8 @@ class VedrusArduNode(Node):
 					msg.header.stamp = stamp
 					msg.tick = int(div[4])
 					msg.current = float(div[2])
-					msg.power = int(div[11])
-					msg.forward = div[12] == '1'
+					msg.power = int(div[12])
+					msg.forward = div[13] == '1'
 					self.publisher_motor.publish(msg)
 
 				except ValueError:

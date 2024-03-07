@@ -1,12 +1,12 @@
-// cmfX - command to move forward at X/256 power
-// cmrX - command to move reverse at X/256 power
-// cbXX - command to break
+// cmfXY - command to move forward motors at X/256, Y/256 powers
+// cmrXY - command to move reverse motors at X/256, Y/256 powers
+// cbXXY - command to break
 
 // TODO:
 // - 
 
 //#define DEBUG
-#define LEFT
+//#define LEFT
 
 // bme280
 #include <Wire.h>
@@ -76,7 +76,8 @@ void speed2() {
 byte commandStage = 0;
 char command = ' ';
 char mode = 'm';         // move mode ['m' = move; 'b' = break]
-byte power = 0; // move|break power
+byte power1 = 0; // move|break power
+byte power2 = 0; // move|break power
 byte dir = 0;   // move|break direction [0 = cw; 1 = ccw]
 
 void loop() { 
@@ -127,7 +128,12 @@ void loop() {
         break;
 
       case 3:
-        power = ch;
+        power1 = ch;
+        commandStage = 4;
+        break;
+
+      case 4:
+        power2 = ch;
         commandStage = 0;
         break;
     }
@@ -139,8 +145,10 @@ void loop() {
     Serial.print(dir);
     Serial.print(", mode = ");
     Serial.print(mode == 'b');
-    Serial.print(", power = ");
-    Serial.println(power);
+    Serial.print(", power1 = ");
+    Serial.print(power1);
+    Serial.print(", power2 = ");
+    Serial.println(power2);
 
   #else
     digitalWrite(BLDC1_DIR, dir);
@@ -149,13 +157,13 @@ void loop() {
     digitalWrite(BLDC1_BRK, mode == 'b');
     digitalWrite(BLDC2_BRK, mode == 'b');
 
-    analogWrite(BLDC1_PWM, power);
-    analogWrite(BLDC2_PWM, power);
+    analogWrite(BLDC1_PWM, power1);
+    analogWrite(BLDC2_PWM, power2);
   #endif
 
   // status
-  // VEDX,current1,current2,speed1,speed2,sonar1,sonar2,bme:temp,bme:hum,bme:pres,current_sys,power,dir,END
-  // VEDR,253.06  ,261.94  ,0     ,0     ,-1    ,-1    ,0       ,0      ,0       ,253.81     ,0    ,0  ,END
+  // VEDX,current1,current2,speed1,speed2,sonar1,sonar2,bme:temp,bme:hum,bme:pres,current_sys,power1,power2,dir,END
+  // VEDR,253.06  ,261.94  ,0     ,0     ,-1    ,-1    ,0       ,0      ,0       ,253.81     ,0     ,0     ,0  ,END
 
   int current, i, j;
 
@@ -231,7 +239,10 @@ void loop() {
   Serial.print(current / 16.);
   Serial.print(",");
 
-  Serial.print(power);
+  Serial.print(power1);
+  Serial.print(",");
+
+  Serial.print(power2);
   Serial.print(",");
 
   Serial.print(dir);

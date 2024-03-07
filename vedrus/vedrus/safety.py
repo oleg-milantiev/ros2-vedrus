@@ -25,7 +25,7 @@ CAMERA_FOV = {
 	'back': 80.,
 	}
 
-#DEPTH_PUBLISH_TOPIC = '/img_out'
+DEPTH_PUBLISH_TOPIC = '/img_out'
 
 #TBD
 #YOLO_RANGE_ALARM = {
