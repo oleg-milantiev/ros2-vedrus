@@ -18,8 +18,8 @@ Adafruit_BME280 bme; // I2C
 // сонар
 #include <NewPing.h>
 
-NewPing sonar1(A1, A0, 200);
-NewPing sonar2(A2, 5, 200);
+NewPing sonar1(A1, A0, 150);
+NewPing sonar2(A2, 5, 150);
 
 // BLDC
 #define BLDC1_PWM 10
@@ -63,8 +63,8 @@ void setup() {
   bme_status = bme.begin(0x76);
 }
 
-int speed_1 = 0;
-int speed_2 = 0;
+uint16_t speed_1 = 0;
+uint16_t speed_2 = 0;
 
 void speed1() {
   speed_1++;
@@ -174,14 +174,14 @@ void loop() {
   #endif
 
   current = 0;
-  for (i = 0; i < 16; i++) {
+  for (i = 0; i < 4; i++) {
     current += analogRead(CURRENT1);
   }
   Serial.print(current / 16.);
   Serial.print(",");
 
   current = 0;
-  for (i = 0; i < 16; i++) {
+  for (i = 0; i < 4; i++) {
     current += analogRead(CURRENT2);
   }
   Serial.print(current / 16.);
@@ -193,7 +193,7 @@ void loop() {
   Serial.print(",");
 
   current = j = 0;
-  for (i = 0; i < 4; i++) {
+  for (i = 0; i < 2; i++) {
     int cm = sonar1.ping();
 
     if (cm > 0) {
@@ -205,7 +205,7 @@ void loop() {
   Serial.print(",");
 
   current = j = 0;
-  for (i = 0; i < 4; i++) {
+  for (i = 0; i < 2; i++) {
     int cm = sonar2.ping();
 
     if (cm > 0) {
