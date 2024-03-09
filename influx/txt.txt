@@ -1,7 +1,9 @@
-apt install influxdb influxdb-client python3-influxdb
+apt install influxdb influxdb-client python3-influxdb libinfluxdb-dev
 # influx
 create database r2
 use r2
 create user r2 with password 'r2'
 GRANT ALL PRIVILEGES TO r2
 select value from temperature where time > now() - 4d group by location
+
+influx -database 'r2' -execute "select * from motor where time > now() - 1h and location = 'left_rear'" -format 'csv' > motor.csv
