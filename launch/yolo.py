@@ -66,19 +66,19 @@ def generate_launch_description():
 #                {'pointcloud.enable': True},
 			]
 		),
-#        Node(
-#            package='influx',
-#            executable='logger',
-#            output='screen',
-#            emulate_tty=True,
-#            parameters=[
-#                {'host': 'localhost'},
-#                {'port': 8086},
-#                {'user': 'r2'},
-#                {'password': 'r2'},
-#                {'database': 'r2'},
-#            ]
-#        ),
+		#Node(
+		#	package='influx',
+		#	executable='logger',
+		#	output='screen',
+		#	emulate_tty=True,
+		#	parameters=[
+		#		{'host': 'localhost'},
+		#		{'port': 8086},
+		#		{'user': 'r2'},
+		#		{'password': 'r2'},
+		#		{'database': 'r2'},
+		#	]
+		#),
 		Node(
 			package='vedrus',
 			executable='ardu',
