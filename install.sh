@@ -29,9 +29,11 @@ apt-get install -y ros-iron-usb-cam
 apt-get install -y python3-pip python3-serial
 python3 -m pip install setuptools==58.2.0
 python3 -m pip install getch # keyboard controller
+python3 -m pip install simple-pid
 
 ln -s `pwd`/launch.sh /opt/ros/iron/launch.sh
 ln -s `pwd`/launch /opt/ros/iron/launch
+ln -s `pwd`/influx /opt/ros/iron/src/influx
 ln -s `pwd`/vedrus /opt/ros/iron/src/vedrus
 ln -s `pwd`/vedrus_interfaces /opt/ros/iron/src/vedrus_interfaces
 ln -s `pwd`/yolov8_rknn /opt/ros/iron/src/yolov8_rknn
