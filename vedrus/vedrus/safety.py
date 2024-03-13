@@ -1,12 +1,13 @@
 import rclpy
 from rclpy.node import Node
-from vedrus_interfaces.msg import Safety, Sonar
+from vedrus_interfaces.msg import Safety, Sonar, MotorMove, KeepAlive
 from yolov8_interfaces.msg import InferenceResult, Yolov8Inference
 
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import cv2
 import sys
+import time
 bridge = CvBridge()
 
 import numpy as np
@@ -33,6 +34,8 @@ DEPTH_PUBLISH_TOPIC = '/img_out'
 #	}
 
 class SafetyNode(Node):
+	crash = False
+
 	def __init__(self):
 		super().__init__('safety_node')
 
@@ -54,8 +57,49 @@ class SafetyNode(Node):
 
 		self.publisher_safety = self.create_publisher(Safety, '/vedrus/safety', 10)
 
+		self.publisher_keepalive = self.create_publisher(KeepAlive, '/vedrus/keepalive/safety', 10)
+		self.create_timer(0.33333333, self.timer_keepalive)
+		self.create_subscription(
+			KeepAlive,
+			'/vedrus/keepalive/controller',
+			self.controller_keepalive_callback,
+			10)
+		self.keepalive = time.time() + 10 # 10 sec keepalive start gap
+
 		if 'DEPTH_PUBLISH_TOPIC' in globals():
 			self.publisher_depth = self.create_publisher(Image, DEPTH_PUBLISH_TOPIC, 10)
+
+		self.get_logger().info('Start Safety')
+
+	def controller_keepalive_callback(self, data):
+		self.keepalive = time.time()
+
+	def timer_keepalive(self):
+		if self.crash:
+			return
+
+		# отправлю свой keepalive
+		msg = KeepAlive()
+		msg.header.stamp = self.get_clock().now().to_msg()
+		msg.header.frame_id = 'safety'
+		self.publisher_keepalive.publish(msg)
+
+		# проверю контроллера keepalive
+		if time.time() - self.keepalive >= 2:
+			self.crash = True
+
+			self.get_logger().info('Got controller keepalive timeout!')
+
+			msg = MotorMove()
+			msg.crash = True
+			# TBD надо ли все поля перечислить?
+
+			publisher = self.create_publisher(MotorMove, '/vedrus/left/move', 10)
+			publisher.publish(msg)
+
+			publisher = self.create_publisher(MotorMove, '/vedrus/right/move', 10)
+			publisher.publish(msg)
+
 
 	def yolo_callback(self, data):
 		for inference in data.yolov8_inference:
@@ -70,6 +114,7 @@ class SafetyNode(Node):
 				self.publisher_safety.publish(msg)
 
 	def sonar_callback(self, data):
+		return #DEBUG
 		if 0. < data.range < 100.:
 			msg = Safety()
 			msg.header.frame_id = 'sonar'
@@ -90,8 +135,9 @@ class SafetyNode(Node):
 		arr = np.where(arr > 255, 255, arr)
 
 		# затереть нолики = рамку. И её градиент
-		arr[0:10, 0:10] = 255
+		#arr[0:30, 0:30] = 255
 		arr[0:MAX_Y, 0:5] = 255
+		arr[0:30, 0:MAX_X] = 255
 		arr[MAX_Y - 1, 0:MAX_X] = 255
 
 		def centers(mask):
@@ -114,7 +160,7 @@ class SafetyNode(Node):
 			else:
 				return center_of_mass(mask, lbl[0], index)
 
-		cc = centers(np.where(arr < 16, 1, 0))
+		cc = centers(np.where(((arr > 3) & (arr < 16)), 1, 0))
 
 		stamp = self.get_clock().now().to_msg()
 

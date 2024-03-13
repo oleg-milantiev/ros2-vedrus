@@ -24,6 +24,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
     "msg/MotorMove.msg"
     "msg/MotorPID.msg"
     "msg/Safety.msg"
+    "msg/KeepAlive.msg"
     "msg/Sonar.msg"
     DEPENDENCIES std_msgs
  )

@@ -21,23 +21,40 @@ DEBUG = False
 CSV = True
 
 class VedrusArduNode(Node):
+	crash = False
+
 	side = None # left | right side sign
 	start = None # VEDL | VEDR line start sign
 	line = None # string[] line, readed from serial
 
 	pid1 = None # simple_pid.PID instance
-	tickIncrements1 = deque([0, 0, 0, 0, 0], maxlen=5) # actual tick increments by 0.2s cycle
 	tickLast1 = None
 	powerLast1 = 0
 
 	pid2 = None # simple_pid.PID instance
-	tickIncrements2 = deque([0, 0, 0, 0, 0], maxlen=5) # actual tick increments by 0.2s cycle
 	tickLast2 = None
 	powerLast2 = 0
+
+	pidBreaking = False
 
 	# получение прямой команды к моторам через /vedrus/side/motor::MotorMove
 	# эта команда будет тут же выполнена
 	def motor_move(self, msg):
+		# crash ставится раз и больше не даёт двигать моторами
+		if self.crash:
+			return
+
+		if msg.crash:
+			self.get_logger().info('Got crash signal!')
+
+			self.crash = True
+
+			bytes = [ord('c'), ord('b'), ord('f'), 0, 0]
+			self.ser.write(bytes)
+			return
+
+		self.get_logger().info('Got MOVE: '+ str(msg.power1) +':'+ str(msg.power2))
+
 		bytes = [ord('c')]
 		bytes.append(ord('b') if msg.breaking else ord('m'))
 
@@ -51,17 +68,31 @@ class VedrusArduNode(Node):
 
 		self.ser.write(bytes)
 
-	# получение нового ticks per second через /vedrus/side/pid::MotorPID.
-	# к нему моторы будут стремиться с помощью ПИД-регулятора
+	'''
+	Получение нового ticks per frame через /vedrus/side/pid::MotorPID.
+	К нему моторы будут стремиться с помощью ПИД-регуляторов
+	Поступает сообзщение MotorPID:
+	- bool forward
+	- float32 speed
+	'''
 	def motor_pid(self, msg):
-		'''
-		Поступает сообзщение MotorPID:
-		- bool forward
-		- int16 speed
-		'''
 		self.pid1.setpoint = msg.speed
 		self.pid2.setpoint = msg.speed
-		print(msg)
+		self.get_logger().info('Got PID: '+ str(msg.speed))
+
+		if msg.breaking:
+			self.get_logger().info('Got PID breaking')
+
+			self.pidBreaking = True
+
+			msg = MotorMove()
+			msg.breaking = True
+			msg.forward = msg.forward
+			msg.power1 = 0
+			msg.power2 = 0
+			self.motor_move(msg)
+
+			self.pidInit()
 
 	def __init__(self):
 		super().__init__('vedrus_ardu')
@@ -78,20 +109,27 @@ class VedrusArduNode(Node):
 		self.serial_thread = threading.Thread(target=self.serial_reader)
 		self.serial_thread.start()
 
-		#https://drives.ru/stati/nastrojka-pid-regulyatora/
-		#rear
-		self.pid1 = PID(1, 1, 0.025, setpoint=0)
-		self.pid1.sample_time = 0.2
-		self.pid1.output_limits = (-1, 25) # 255
-
-		#front
-		self.pid2 = PID(1, 1, 0.025, setpoint=0)
-		self.pid2.sample_time = 0.2
-		self.pid2.output_limits = (-1, 25) # 255
+		self.pidInit()
 
 		self.timer = self.create_timer(0.2, self.timer_publish)
 
 		self.get_logger().info('Node initialized')
+
+	def pidInit(self):
+		self.pidBreaking = False
+
+		#https://drives.ru/stati/nastrojka-pid-regulyatora/
+		#rear
+		self.pid1 = PID(1, 2, 0.025, setpoint=0)
+		self.pid1.sample_time = 0.2
+		self.pid1.output_limits = (-1, 75) # 255
+		self.powerLast1 = 0
+
+		#front
+		self.pid2 = PID(1, 2, 0.025, setpoint=0)
+		self.pid2.sample_time = 0.2
+		self.pid2.output_limits = (-1, 75) # 255
+		self.powerLast2 = 0
 
 	def timer_publish(self):
 		if self.line is None:
@@ -207,13 +245,11 @@ class VedrusArduNode(Node):
 				if tickIncrement1 < 0:
 					tickIncrement1 += 65536
 
-				self.tickIncrements1.append(tickIncrement1)
 				self.tickLast1 = msg.tick
 
 				if DEBUG:
-					print('+'+ str(tickIncrement1) +'. sum='+ str(sum(self.tickIncrements1)) +'. setpoint='+ str(self.pid1.setpoint))
+					print('+'+ str(tickIncrement1) +'. setpoint='+ str(self.pid1.setpoint))
 
-				#powerToSet1 = self.pid1(sum(self.tickIncrements1))
 				powerToSet1 = self.pid1(tickIncrement1)
 
 				if self.pid1.setpoint == 0 and powerToSet1 < 4:
@@ -240,13 +276,11 @@ class VedrusArduNode(Node):
 				if tickIncrement2 < 0:
 					tickIncrement2 += 65536
 
-				self.tickIncrements2.append(tickIncrement2)
 				self.tickLast2 = msg.tick
 
 				if DEBUG:
-					print('+'+ str(tickIncrement2) +'. sum='+ str(sum(self.tickIncrements2)) +'. setpoint='+ str(self.pid2.setpoint))
+					print('+'+ str(tickIncrement2) +'. setpoint='+ str(self.pid2.setpoint))
 
-				#powerToSet2 = self.pid2(sum(self.tickIncrements2))
 				powerToSet2 = self.pid2(tickIncrement2)
 
 				if self.pid2.setpoint == 0 and powerToSet2 < 4:
@@ -258,7 +292,7 @@ class VedrusArduNode(Node):
 				#if powerToSet >= 25 and sum(self.tickIncrements) == 0:
 					# send power = 0
 
-				if powerToSet1 != self.powerLast1 or powerToSet2 != self.powerLast2:
+				if not self.pidBreaking and (powerToSet1 != self.powerLast1 or powerToSet2 != self.powerLast2):
 					if DEBUG:
 						print('                             ', powerToSet1, powerToSet2)
 

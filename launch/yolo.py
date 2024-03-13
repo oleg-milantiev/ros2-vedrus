@@ -81,6 +81,12 @@ def generate_launch_description():
 		#),
 		Node(
 			package='vedrus',
+			executable='controller',
+			output='screen',
+			emulate_tty=True,
+		),
+		Node(
+			package='vedrus',
 			executable='ardu',
 			output='screen',
 			emulate_tty=True,
