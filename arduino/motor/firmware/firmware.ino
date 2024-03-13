@@ -6,7 +6,7 @@
 // - 
 
 //#define DEBUG
-//#define LEFT
+#define LEFT
 
 // bme280
 #include <Wire.h>
@@ -174,14 +174,14 @@ void loop() {
   #endif
 
   current = 0;
-  for (i = 0; i < 4; i++) {
+  for (i = 0; i < 16; i++) {
     current += analogRead(CURRENT1);
   }
   Serial.print(current / 16.);
   Serial.print(",");
 
   current = 0;
-  for (i = 0; i < 4; i++) {
+  for (i = 0; i < 16; i++) {
     current += analogRead(CURRENT2);
   }
   Serial.print(current / 16.);
