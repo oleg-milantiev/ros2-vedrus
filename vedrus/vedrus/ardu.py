@@ -17,6 +17,7 @@ from std_msgs.msg import UInt8, UInt16, Float32, String
 from sensor_msgs.msg import Temperature, RelativeHumidity
 from vedrus_interfaces.msg import Motor, MotorMove, MotorPID, Sonar
 
+MAX_POWER = 15 # 255
 DEBUG = False
 CSV = True
 
@@ -53,7 +54,7 @@ class VedrusArduNode(Node):
 			self.ser.write(bytes)
 			return
 
-		self.get_logger().info('Got MOVE: '+ str(msg.power1) +':'+ str(msg.power2))
+		self.get_logger().info('Got MOVE: '+ ('+' if msg.forward else '-') + str(msg.power1) +':'+ ('+' if msg.forward else '-') + str(msg.power2))
 
 		bytes = [ord('c')]
 		bytes.append(ord('b') if msg.breaking else ord('m'))
@@ -73,7 +74,7 @@ class VedrusArduNode(Node):
 	К нему моторы будут стремиться с помощью ПИД-регуляторов
 	Поступает сообзщение MotorPID:
 	- bool forward
-	- float32 speed
+	- signed float32 speed: +вперёд и -назад
 	'''
 	def motor_pid(self, msg):
 		self.pid1.setpoint = msg.speed
@@ -84,6 +85,8 @@ class VedrusArduNode(Node):
 			self.get_logger().info('Got PID breaking')
 
 			self.pidBreaking = True
+			self.powerLast1 = 0
+			self.powerLast2 = 0
 
 			msg = MotorMove()
 			msg.breaking = True
@@ -122,13 +125,13 @@ class VedrusArduNode(Node):
 		#rear
 		self.pid1 = PID(1, 2, 0.025, setpoint=0)
 		self.pid1.sample_time = 0.2
-		self.pid1.output_limits = (-1, 75) # 255
+		self.pid1.output_limits = (-MAX_POWER, MAX_POWER)
 		self.powerLast1 = 0
 
 		#front
 		self.pid2 = PID(1, 2, 0.025, setpoint=0)
 		self.pid2.sample_time = 0.2
-		self.pid2.output_limits = (-1, 75) # 255
+		self.pid2.output_limits = (-MAX_POWER, MAX_POWER)
 		self.powerLast2 = 0
 
 	def timer_publish(self):
@@ -247,12 +250,15 @@ class VedrusArduNode(Node):
 
 				self.tickLast1 = msg.tick
 
+				if self.powerLast1 < 0:
+					tickIncrement1 = -tickIncrement1
+
 				if DEBUG:
 					print('+'+ str(tickIncrement1) +'. setpoint='+ str(self.pid1.setpoint))
 
 				powerToSet1 = self.pid1(tickIncrement1)
 
-				if self.pid1.setpoint == 0 and powerToSet1 < 4:
+				if self.pid1.setpoint == 0 and abs(powerToSet1) < 4:
 					powerToSet1 = 0
 
 				msg = Motor()
@@ -278,12 +284,15 @@ class VedrusArduNode(Node):
 
 				self.tickLast2 = msg.tick
 
+				if self.powerLast2 < 0:
+					tickIncrement2 = -tickIncrement2
+
 				if DEBUG:
 					print('+'+ str(tickIncrement2) +'. setpoint='+ str(self.pid2.setpoint))
 
 				powerToSet2 = self.pid2(tickIncrement2)
 
-				if self.pid2.setpoint == 0 and powerToSet2 < 4:
+				if self.pid2.setpoint == 0 and abs(powerToSet2) < 4:
 					powerToSet2 = 0
 
 				# TBD
@@ -300,10 +309,11 @@ class VedrusArduNode(Node):
 					self.powerLast2 = powerToSet2
 
 					msg = MotorMove()
-					msg.breaking = (powerToSet1 < 0) or (powerToSet2 < 0)
-					msg.forward = True
-					msg.power1 = round(powerToSet1) if powerToSet1 >= 0 else 0
-					msg.power2 = round(powerToSet2) if powerToSet2 >= 0 else 0
+					msg.breaking = False
+					msg.forward = (powerToSet1 > 0) or (powerToSet2 > 0) # TBD раздельный forward для моторов (в т.ч. в firmware). Заодно и раздельный breaking
+					msg.power1 = round(abs(powerToSet1))
+					msg.power2 = round(abs(powerToSet2))
+
 					self.motor_move(msg)
 
 			except ValueError as ex:

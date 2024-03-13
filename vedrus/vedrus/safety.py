@@ -105,7 +105,7 @@ class SafetyNode(Node):
 		for inference in data.yolov8_inference:
 			if inference.class_name in ['person', 'dog', 'cat', 'car']:
 				msg = Safety()
-				msg.header.frame_id = 'yolo'
+				msg.header.frame_id = 'yolo:'+ inference.class_name
 				msg.header.stamp = self.get_clock().now().to_msg()
 				msg.alarm = False
 				msg.warning = True
