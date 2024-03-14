@@ -31,7 +31,7 @@ def generate_launch_description():
 				{'model': '/opt/ros/iron/yolov8n-1.5.2.rknn'},
 				{'classes': ("person","bicycle","car","motorbike","airplane","bus","train","truck","boat","traffic light","fire hydrant","stop sign","parking meter","bench","bird","cat","dog","horse","sheep","cow","elephant","bear","zebra","giraffe","backpack","umbrella","handbag","tie","suitcase","frisbee","skis","snowboard","sports ball","kite","baseball bat","baseball glove","skateboard","surfboard","tennis racket","bottle","wine glass","cup","fork","knife","spoon","bowl","banana","apple","sandwich","orange","broccoli","carrot","hot dog","pizza","donut","cake","chair","sofa","pottedplant","bed","diningtable","toilet","tvmonitor","laptop","mouse","remote","keyboard","cell phone","microwave","oven","toaster","sink","refrigerator","book","clock","vase","scissors","teddy bear","hair drier","toothbrush")},
 				{'camera_ids': ('back', 'front')}, # как звать камеры. Этот id уйдёт в header.frame_id
-				{'camera_rates': (5, 6)}, # обрабатывать каждый пятый кадр с первой и каждый шестой кадр со второй камеры (то есть раз в секунду для fps 5 и 6 соответственно)
+				{'camera_rates': (3, 3)}, # обрабатывать каждый пятый кадр с первой и каждый шестой кадр со второй камеры (то есть раз в секунду для fps 5 и 6 соответственно)
 #				{'save_image_rates': (5, 5)}, # сохранять изображение раз в N обработок (в моём примере раз в пять секунд)
 				{'camera_raw_topics': ('/image_raw', '/color/image_raw')}, # откуда читать картинки
 				{'inference_topic': '/yolov8/inference'}, # куда кидать солвы
