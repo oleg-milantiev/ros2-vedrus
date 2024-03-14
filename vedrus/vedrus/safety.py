@@ -110,11 +110,11 @@ class SafetyNode(Node):
 				msg.alarm = False
 				msg.warning = True
 				msg.range = 100. # TBD через размер бокса, в зависимости от класса
-				msg.azimuth = self.az360((((inference.right - inference.left) / 2. + inference.left - 320.) / 320.) * CAMERA_FOV[data.header.frame_id] / 2. + CAMERA_AZIMUTH[data.header.frame_id])
+				msg.azimuth = self.__az360((((inference.right - inference.left) / 2. + inference.left - 320.) / 320.) * CAMERA_FOV[data.header.frame_id] / 2. + CAMERA_AZIMUTH[data.header.frame_id])
 				self.publisher_safety.publish(msg)
 
 	def sonar_callback(self, data):
-		return #DEBUG
+		#return #DEBUG
 		if 0. < data.range < 100.:
 			msg = Safety()
 			msg.header.frame_id = 'sonar'
@@ -136,9 +136,9 @@ class SafetyNode(Node):
 
 		# затереть нолики = рамку. И её градиент
 		#arr[0:30, 0:30] = 255
-		arr[0:MAX_Y, 0:5] = 255
-		arr[0:30, 0:MAX_X] = 255
-		arr[MAX_Y - 1, 0:MAX_X] = 255
+		#arr[0:MAX_Y, 0:5] = 255
+		#arr[0:30, 0:MAX_X] = 255
+		#arr[MAX_Y - 1, 0:MAX_X] = 255
 
 		def centers(mask):
 			# уменьшу разрешение маски по min для фильтрации мелкого мусора
@@ -171,7 +171,7 @@ class SafetyNode(Node):
 			msg.alarm = True
 			msg.warning = False
 			msg.range = 50. # TBD калибрануть Z
-			msg.azimuth = self.az360((c[1] * 2. / float(MAX_X) - 1.) * CAMERA_FOV['front'] / 2)
+			msg.azimuth = self.__az360((c[1] * 2. / float(MAX_X) - 1.) * CAMERA_FOV['front'] / 2)
 			self.publisher_safety.publish(msg)
 			arr[int(c[0]),int(c[1])] = 250
 
@@ -184,14 +184,14 @@ class SafetyNode(Node):
 			msg.alarm = False
 			msg.warning = True
 			msg.range = 100. # TBD калибрануть Z
-			msg.azimuth = self.az360((c[1] * 2. / float(MAX_X) - 1.) * CAMERA_FOV['front'] / 2)
+			msg.azimuth = self.__az360((c[1] * 2. / float(MAX_X) - 1.) * CAMERA_FOV['front'] / 2)
 			self.publisher_safety.publish(msg)
 			arr[int(c[0]),int(c[1])] = 150
 
 		if 'DEPTH_PUBLISH_TOPIC' in globals():
 			self.publisher_depth.publish(bridge.cv2_to_imgmsg(arr.astype('uint8'), encoding='mono8'))
 
-	def az360(self, azimuth):
+	def __az360(self, azimuth):
 		return azimuth + 360 if azimuth < 0 else azimuth;
 
 def main(args=None):
