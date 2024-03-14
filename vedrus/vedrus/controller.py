@@ -1,3 +1,4 @@
+import csv
 import rclpy
 import numpy as np
 from rclpy.node import Node
@@ -7,6 +8,7 @@ from vedrus_interfaces.msg import MotorMove, MotorPID, Safety, KeepAlive
 import time
 
 DEBUG = True
+CSV = True
 RGBD_FOV = 80.
 
 # Режим "Поворот к персоне" (с движением вперёд или без)
@@ -34,6 +36,11 @@ class ModeRotateToPerson():
 
 	def __init__(self, forward=False):
 		self.forward = forward
+		if CSV:
+			self.csv = csv.writer(open('/opt/ros/iron/log/csv/controller/mode/rotate_to_person.csv', mode='w', newline=''))
+			self.csv.writerow([
+				'time', 'rotateAzimuth', 'rotateSpeed', 'move', 'left', 'right'
+			])
 
 	# TBD DRY какой-то base классссс
 	# поймал safety.warning
@@ -45,7 +52,7 @@ class ModeRotateToPerson():
 			self.lastPersonTime = time.time()
 
 			if DEBUG:
-				node.get_logger().info('ModeRotateToPerson: got warning with person. New azimuth='+ str(self.azimuth))
+				node.get_logger().info('ModeRotateToPerson: got person: {:.4f}°'.format(self.azimuth))
 
 		# Собираю данные RGBD для дальнейшего поиска расстояния до персоны
 		if msg.header.frame_id == 'rgbd':
@@ -77,7 +84,6 @@ class ModeRotateToPerson():
 		gap = 5.
 
 		azimuthDepths = [item for item in self.depths if (azimuth180 - gap) < item['azimuth'] < (azimuth180 + gap)]
-		#print(azimuthDepths)
 
 		return len(azimuthDepths) > 0
 
@@ -89,7 +95,6 @@ class ModeRotateToPerson():
 
 			self.started = True
 			self.pid = PID(5.0, 0.1, 0.05, setpoint=0.0)
-			#self.pid = PID(5, 2, 0.025, setpoint=0.0)
 			self.pid.sample_time = 0.2
 			self.pid.output_limits = (-1.0, 1.0)
 
@@ -116,13 +121,13 @@ class ModeRotateToPerson():
 		# Персона есть? А то сидим и ждём
 		if self.azimuth is None:
 			if DEBUG:
-				node.get_logger().info('ModeRotateToPerson: no person. Waiting for ...')
+				node.get_logger().info('ModeRotateToPerson: no person.')
 			return self
 
 		# Персоны не было 3 секунды. ПОТЕРЯЛ!!! :)
 		if (time.time() - self.lastPersonTime) > 3:
 			if DEBUG:
-				node.get_logger().info('ModeRotateToPerson: No new person 3 sec. Waiting for new')
+				node.get_logger().info('ModeRotateToPerson: No new person 3 sec.')
 
 			# Стоп машина! :)
 			node.left(0.)  # без тормоза
@@ -133,29 +138,35 @@ class ModeRotateToPerson():
 
 		# -1 .. +1
 		rotateAzimuth = (self.azimuth - 360. if self.azimuth > 180. else self.azimuth) / 180.
-		if DEBUG:
-			node.get_logger().info('ModeRotateToPerson: rotateAzimuth='+ str(rotateAzimuth))
-
 		rotateSpeed = self.pid(rotateAzimuth)
-
-		if DEBUG:
-			node.get_logger().info('ModeRotateToPerson: rotateSpeed='+ str(rotateSpeed))
 
 		# если задан флаг "двигаться вперёд"
 		# если азимут в FOV передней RGBD камеры
 		# если расстояние до персоны > 1м
 		if self.forward and not (RGBD_FOV/2. < self.azimuth < (360.-RGBD_FOV/2.)) and not self.__isPersonNearAtAzimuth():
-			if DEBUG:
-				node.get_logger().info('ModeRotateToPerson: forward and rotate')
+			move = True
 
-			node.left(min(self.ROTATE_SPEED_MAX - (rotateSpeed * self.ROTATE_SPEED_MAX), self.ROTATE_SPEED_MAX))
-			node.right(min(self.ROTATE_SPEED_MAX + (rotateSpeed * self.ROTATE_SPEED_MAX), self.ROTATE_SPEED_MAX))
+			left = min(self.ROTATE_SPEED_MAX - (rotateSpeed * self.ROTATE_SPEED_MAX), self.ROTATE_SPEED_MAX)
+			right = min(self.ROTATE_SPEED_MAX + (rotateSpeed * self.ROTATE_SPEED_MAX), self.ROTATE_SPEED_MAX)
 		else:
-			if DEBUG:
-				node.get_logger().info('ModeRotateToPerson: only rotate')
+			move = False
 
-			node.left(-self.ROTATE_SPEED_MAX * rotateSpeed)
-			node.right(self.ROTATE_SPEED_MAX * rotateSpeed)
+			left = -self.ROTATE_SPEED_MAX * rotateSpeed
+			right = self.ROTATE_SPEED_MAX * rotateSpeed
+
+		node.left(left)
+		node.right(right)
+
+		if CSV:
+			stamp = node.get_clock().now().to_msg()
+			stampSecond = stamp.sec + stamp.nanosec / 1e9
+
+			self.csv.writerow([
+				stampSecond, rotateAzimuth, rotateSpeed, move, left, right
+			])
+
+		if DEBUG:
+			print('{:12.2f} {:12.2f} {:12.2f}      {:b} {:12.4f} {:12.4f}'.format(stampSecond, rotateAzimuth, rotateSpeed, move, left, right))
 
 		# ... или продолжить жить в этом режиме
 		return self
@@ -272,8 +283,8 @@ class VedrusControlerNode(Node):
 
 
 	def left(self, speed, breaking=False):
-		if DEBUG:
-			self.get_logger().info('VedrusControlerNode::left: set speed to '+ str(speed))
+		#if DEBUG:
+		#	self.get_logger().info('VedrusControlerNode::left: set speed to '+ str(speed))
 
 		msg = MotorPID()
 
@@ -284,8 +295,8 @@ class VedrusControlerNode(Node):
 		return
 
 	def right(self, speed, breaking=False):
-		if DEBUG:
-			self.get_logger().info('VedrusControlerNode::right: set speed to '+ str(speed))
+		#if DEBUG:
+		#	self.get_logger().info('VedrusControlerNode::right: set speed to '+ str(speed))
 
 		msg = MotorPID()
 

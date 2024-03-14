@@ -17,7 +17,7 @@ from std_msgs.msg import UInt8, UInt16, Float32, String
 from sensor_msgs.msg import Temperature, RelativeHumidity
 from vedrus_interfaces.msg import Motor, MotorMove, MotorPID, Sonar
 
-MAX_POWER = 15 # 255
+MAX_POWER = 150 # 255
 DEBUG = False
 CSV = True
 
@@ -54,7 +54,8 @@ class VedrusArduNode(Node):
 			self.ser.write(bytes)
 			return
 
-		self.get_logger().info(self.side +': Got MOVE: '+ ('+' if msg.forward else '-') + str(msg.power1) +':'+ ('+' if msg.forward else '-') + str(msg.power2))
+		if DEBUG:
+			self.get_logger().info(self.side +': Got MOVE: '+ ('+' if msg.forward else '-') + str(msg.power1) +':'+ ('+' if msg.forward else '-') + str(msg.power2))
 
 		bytes = [ord('c')]
 		bytes.append(ord('b') if msg.breaking else ord('m'))
@@ -79,10 +80,12 @@ class VedrusArduNode(Node):
 	def motor_pid(self, msg):
 		self.pid1.setpoint = msg.speed
 		self.pid2.setpoint = msg.speed
-		self.get_logger().info(self.side +':Got PID: '+ str(msg.speed))
+		if DEBUG:
+			self.get_logger().info(self.side +':Got PID: '+ str(msg.speed))
 
 		if msg.breaking:
-			self.get_logger().info(self.side +':Got PID breaking')
+			if DEBUG:
+				self.get_logger().info(self.side +':Got PID breaking')
 
 			self.pidBreaking = True
 			self.powerLast1 = 0

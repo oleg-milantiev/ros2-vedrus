@@ -114,7 +114,7 @@ class SafetyNode(Node):
 				self.publisher_safety.publish(msg)
 
 	def sonar_callback(self, data):
-		#return #DEBUG
+		return #DEBUG
 		if 0. < data.range < 100.:
 			msg = Safety()
 			msg.header.frame_id = 'sonar'
