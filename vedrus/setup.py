@@ -26,6 +26,7 @@ setup(
 			'controller = vedrus.controller:main',
 			'screen = vedrus.screen:main',
 			'safety = vedrus.safety:main',
+			'server = vedrus.server:main',
 		],
 	},
 )

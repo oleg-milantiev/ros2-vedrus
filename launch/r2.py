@@ -109,4 +109,10 @@ def generate_launch_description():
 			output='screen',
 			emulate_tty=True,
 		),
+		Node(
+			package='vedrus',
+			executable='server',
+			output='screen',
+			emulate_tty=True,
+		),
 	])

@@ -30,6 +30,7 @@ apt-get install -y python3-pip python3-serial
 python3 -m pip install setuptools==58.2.0
 python3 -m pip install getch # keyboard controller
 python3 -m pip install simple-pid
+python3 -m pip install aiohttp[speedups]
 
 ln -s `pwd`/launch.sh /opt/ros/iron/launch.sh
 ln -s `pwd`/launch /opt/ros/iron/launch

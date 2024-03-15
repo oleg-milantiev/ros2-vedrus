@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Vedrus bot</title>
+</head>
+<body>
+	<div>
+		<canvas id="safety" width="200" height="200"></canvas>
+	</div>
+
+	<div>
+		<button class="set">Set</button>
+		<input type="text" id="value">
+	</div>
+
+	<script>
+		document.addEventListener('DOMContentLoaded', function() {
+			function drawSafety(data) {
+				// Шаг 1: Получаем элемент canvas из DOM
+				const canvas = document.getElementById('safety');
+				const ctx = canvas.getContext('2d');
+				ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+				// Размер круга
+				const circleRadius = 3;
+				const centerX = canvas.width / 2; // центр холста по X
+				const centerY = canvas.height / 2; // центр холста по Y
+
+				ctx.beginPath();
+				ctx.arc(centerX, centerY, circleRadius, 0, 2 * Math.PI);
+				ctx.fillStyle = 'red';
+				ctx.fill();
+				ctx.closePath();
+
+				// Шаг 2: Пройтись по всем элементам массива и отобразить их на холсте
+
+				for (var i in data.safety) {
+					var item = data.safety[i];
+					//console.log(i);
+
+					// Преобразование азимута в радианы
+					const angle = (90 - item.azimuth) * Math.PI / 180;
+
+					// Вычисление координат для рисования круга
+					const x = centerX + item.range * Math.cos(angle);
+					const y = centerY - item.range * Math.sin(angle);
+
+					// Рисуем круг на холсте
+					ctx.beginPath();
+					ctx.arc(x, y, circleRadius, 0, 2 * Math.PI);
+					ctx.fillStyle = 'black';
+					ctx.fill();
+					ctx.closePath();
+				}
+			}
+
+			// Функция для осуществления GET запроса к /status
+			function getStatus() {
+				fetch('/status')
+					.then(response => response.json())
+					.then(data => drawSafety(data))
+					.catch(error => console.error('Error:', error));
+			}
+
+			// Вызов функции getStatus() каждые 200 миллисекунд (5 раз в секунду)
+			setInterval(getStatus, 200);
+
+			// Обработчик нажатия на кнопку с классом "set"
+			document.querySelector('.set').addEventListener('click', function() {
+				const value = document.getElementById('value').value;
+				fetch('/control', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify({ value: value })
+				})
+				.then(response => response.text())
+				.then(data => console.log(data))
+				.catch(error => console.error('Error:', error));
+			});
+		});
+	</script>
+</body>
+</html>

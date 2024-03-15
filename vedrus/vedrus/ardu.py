@@ -222,7 +222,7 @@ class VedrusArduNode(Node):
 				msg.header.frame_id = self.side +'_rear'
 				msg.header.stamp = stamp
 				msg.range = 300. if div[6] == '-1' else float(div[6]) / 57.
-				msg.azimuth = 180.
+				msg.azimuth = 195. if self.side == 'left' else 165.
 				self.publisher_sonar.publish(msg)
 
 				if CSV:
