@@ -24,6 +24,7 @@ setup(
 #			'gyro = vedrus.gyro:main',
 #			'test = vedrus.test:main',
 			'controller = vedrus.controller:main',
+			'keyboard = vedrus.keyboard:main',
 			'screen = vedrus.screen:main',
 			'safety = vedrus.safety:main',
 			'server = vedrus.server:main',
