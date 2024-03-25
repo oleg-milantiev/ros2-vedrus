@@ -17,7 +17,7 @@ from std_msgs.msg import UInt8, UInt16, Float32, String
 from sensor_msgs.msg import Temperature, RelativeHumidity
 from vedrus_interfaces.msg import Motor, MotorMove, MotorPID, Sonar
 
-MAX_POWER = 150 # 255
+MAX_POWER = 50 # 255
 DEBUG = False
 CSV = True
 
@@ -96,7 +96,8 @@ class VedrusArduNode(Node):
 			msg.forward = msg.forward
 			msg.power1 = 0
 			msg.power2 = 0
-			self.motor_move(msg)
+			#self.motor_move(msg)
+			self.publisher_move.publish(msg)
 
 			self.pidInit()
 
@@ -126,13 +127,14 @@ class VedrusArduNode(Node):
 
 		#https://drives.ru/stati/nastrojka-pid-regulyatora/
 		#rear
-		self.pid1 = PID(1, 2, 0.025, setpoint=0)
+		self.pid1 = PID(2., 0.1, 0.05, setpoint=0)
 		self.pid1.sample_time = 0.2
 		self.pid1.output_limits = (-MAX_POWER, MAX_POWER)
 		self.powerLast1 = 0
 
 		#front
-		self.pid2 = PID(1, 2, 0.025, setpoint=0)
+		#self.pid2 = PID(1, 0.1, 0.05, setpoint=0)
+		self.pid2 = PID(2., 0.1, 0.05, setpoint=0)
 		self.pid2.sample_time = 0.2
 		self.pid2.output_limits = (-MAX_POWER, MAX_POWER)
 		self.powerLast2 = 0
@@ -154,6 +156,7 @@ class VedrusArduNode(Node):
 					'vedrus/'+ self.side +'/move',
 					self.motor_move,
 					10)
+				self.publisher_move = self.create_publisher(MotorMove, 'vedrus/'+ self.side +'/move', 10)
 
 				self.create_subscription(
 					MotorPID,
@@ -167,8 +170,6 @@ class VedrusArduNode(Node):
 				self.publisher_sonar = self.create_publisher(Sonar, 'vedrus/sonar', 10)
 
 				self.publisher_motor = self.create_publisher(Motor, 'vedrus/motor', 10)
-
-				self.publisher_raw = self.create_publisher(String, 'vedrus/'+ self.side +'/raw', 10)
 
 				if CSV:
 					self.csv_motor_front = csv.writer(open('/opt/ros/iron/log/csv/motor/'+ self.side +'/front.csv', mode='w', newline=''))
@@ -317,7 +318,11 @@ class VedrusArduNode(Node):
 					msg.power1 = round(abs(powerToSet1))
 					msg.power2 = round(abs(powerToSet2))
 
-					self.motor_move(msg)
+					# TBD с целью оптимизации эта нода не шлёт сама себе сообщения MotorMove через ROS
+					# Однако, это привело к невозможности отображения в пульте мощности моторов
+					# Возможно, параллельно стоит слать статус моторов именно пульту
+					#self.motor_move(msg)
+					self.publisher_move.publish(msg)
 
 			except ValueError as ex:
 				print(ex)
