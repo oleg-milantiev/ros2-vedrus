@@ -4,19 +4,36 @@ import numpy as np
 from rclpy.node import Node
 from sensor_msgs.msg import Imu
 from simple_pid import PID
-from vedrus_interfaces.msg import MotorMove, MotorPID, Safety, KeepAlive
+from vedrus_interfaces.msg import MotorMove, MotorPID, Safety, KeepAlive, Status, StatusItem
 import time
 
 DEBUG = True
 CSV = True
 RGBD_FOV = 80.
 
+class ModeParent():
+	def _statusInit(self):
+		self.status = Status()
+		self.status.header.stamp = node.get_clock().now().to_msg()
+		self.status.header.frame_id = 'controller'
+
+	def _statusAppend(self, name, value):
+		statusItem = StatusItem()
+		statusItem.name = name
+		statusItem.value = value
+		self.status.items.append(statusItem)
+
+	def _statusPublish(self):
+		node.publisherStatus.publish(self.status)
+
+
 # Режим "Поворот к персоне" (с движением вперёд или без)
-class ModeRotateToPerson():
-	ROTATE_SPEED_MAX = 5.
+class ModeRotateToPerson(ModeParent):
+	ROTATE_SPEED_MAX = 3.
 
 	# Азимут последней замеченной персоны (и время)
 	azimuth = None
+	persons = []
 	lastPersonTime = None
 
 	# simple_pid.PID instance
@@ -34,17 +51,19 @@ class ModeRotateToPerson():
 	# Данные глубин / азимутов за последнюю секунду (две?)
 	depths = []
 
-	def __init__(self, forward=False):
-		self.forward = forward
+	# TBD move to parent
+	def __init__(self):
 		if CSV:
 			self.csv = csv.writer(open('/opt/ros/iron/log/csv/controller/mode/rotate_to_person.csv', mode='w', newline=''))
+
 			self.csv.writerow([
 				'time', 'rotateAzimuth', 'rotateSpeed', 'move', 'left', 'right'
 			])
 
-	# TBD DRY какой-то base классссс
 	# поймал safety.warning
-	def warning(self, node, msg):
+	def warning(self, msg):
+		second = msg.header.stamp.sec + msg.header.stamp.nanosec / 1e9
+
 		# TBD две персоны с разными азимутами (ex.: > 10°)
 		# TBD N персон с близкими азимутами (ex.: 10°)
 		if msg.header.frame_id == 'yolo:person':
@@ -54,21 +73,49 @@ class ModeRotateToPerson():
 			if DEBUG:
 				node.get_logger().info('ModeRotateToPerson: got person: {:.4f}°'.format(self.azimuth))
 
+			'''
+			Надо крепко подумать о том, что считать персоны можно только без движения бота. Или делать это по одному timeframe
+			
+			self.persons.append({
+				'time': second,
+				'azimuth': msg.azimuth,
+			})
+
+			# Удаляю не актуальные в окне 1с
+			self.persons = [item for item in self.persons if item['time'] >= (second - 1)]
+
+			Есть набор азимутов. 
+			Пример: [15]
+				-> он один, его и берём
+			Пример: [15,17]
+				-> база = последний (msg.azimuth)
+				-> разница < gap, берём последний
+			if len(self.persons) == 1:
+				self.azimuth = msg.azimuth
+				self.lastPersonTime = time.time()
+
+				if DEBUG:
+					node.get_logger().info('ModeRotateToPerson: got person: {:.4f}°'.format(self.azimuth))
+
+			one = True
+			gap = 10 # 15 градусов щель
+			for item in self.persons:
+				if distance(item['azimuth'], msg.azimuth) > gap
+			'''
+
 		# Собираю данные RGBD для дальнейшего поиска расстояния до персоны
 		if msg.header.frame_id == 'rgbd':
-			second = msg.header.stamp.sec + msg.header.stamp.nanosec / 1e9
-
 			self.depths.append({
 				'time': second,
 				'azimuth': msg.azimuth - 360. if msg.azimuth > 180. else msg.azimuth, # -180 ... +180
 				'range': msg.range,
 			})
 
-			# Удаляю не актуальные
+			# Удаляю не актуальные в окне 1с
 			self.depths = [item for item in self.depths if item['time'] >= (second - 1)]
 
 	# поймал safety.alarm
-	def alarm(self, node, msg):
+	def alarm(self, msg):
 		self.lastAlarmTime = time.time()
 		self.alarmCount += 1
 
@@ -81,20 +128,24 @@ class ModeRotateToPerson():
 			return False
 
 		azimuth180 = self.azimuth - 360. if self.azimuth > 180. else self.azimuth # -180 ... +180
-		gap = 5.
+		gap = 5. # +-5° допуск
 
 		azimuthDepths = [item for item in self.depths if (azimuth180 - gap) < item['azimuth'] < (azimuth180 + gap)]
 
 		return len(azimuthDepths) > 0
 
-	def cycle(self, node):
+	def cycle(self):
+		self._statusInit()
+		self._statusAppend('mode', 'RotateToPerson')
+		self._statusAppend('forward', 'Y' if self.forward else 'N')
+
 		# вход в режим. Начало поворотов
 		if not self.started:
 			if DEBUG:
 				node.get_logger().info('ModeRotateToPerson: start to rotate/move to person')
 
 			self.started = True
-			self.pid = PID(5.0, 0.1, 0.05, setpoint=0.0)
+			self.pid = PID(3.0, 0.1, 0.05, setpoint=0.0)
 			self.pid.sample_time = 0.2
 			self.pid.output_limits = (-1.0, 1.0)
 
@@ -114,7 +165,11 @@ class ModeRotateToPerson():
 			node.right(0.0, breaking=True)
 
 			route = ModeSafetyStop()
-			route.out = ModeRotateToPerson(forward=self.forward)
+			route.out = ModeRotateToPerson()
+			route.out.forward = self.forward
+
+			self._statusAppend('action', 'Stop by many alarms')
+			self._statusPublish()
 
 			return route
 
@@ -122,6 +177,10 @@ class ModeRotateToPerson():
 		if self.azimuth is None:
 			if DEBUG:
 				node.get_logger().info('ModeRotateToPerson: no person.')
+
+			self._statusAppend('action', 'No person')
+			self._statusPublish()
+
 			return self
 
 		# Персоны не было 3 секунды. ПОТЕРЯЛ!!! :)
@@ -134,11 +193,19 @@ class ModeRotateToPerson():
 			node.right(0.) # плавно скорость в ноль
 
 			self.azimuth = None
+
+			self._statusAppend('action', 'Lost person')
+			self._statusPublish()
+
 			return self
 
 		# -1 .. +1
 		rotateAzimuth = (self.azimuth - 360. if self.azimuth > 180. else self.azimuth) / 180.
-		rotateSpeed = self.pid(rotateAzimuth)
+		#rotateSpeed = self.pid(rotateAzimuth)
+		rotateSpeed = rotateAzimuth
+
+		#self._statusAppend('rotateAzimuth', '{:.2f}'.format(rotateAzimuth))
+		self._statusAppend('rotateSpeed', '{:.2f}'.format(rotateSpeed))
 
 		# если задан флаг "двигаться вперёд"
 		# если азимут в FOV передней RGBD камеры
@@ -146,16 +213,18 @@ class ModeRotateToPerson():
 		if self.forward and not (RGBD_FOV/2. < self.azimuth < (360.-RGBD_FOV/2.)) and not self.__isPersonNearAtAzimuth():
 			move = True
 
-			left = min(self.ROTATE_SPEED_MAX - (rotateSpeed * self.ROTATE_SPEED_MAX), self.ROTATE_SPEED_MAX)
-			right = min(self.ROTATE_SPEED_MAX + (rotateSpeed * self.ROTATE_SPEED_MAX), self.ROTATE_SPEED_MAX)
+			left = self.ROTATE_SPEED_MAX - (rotateSpeed * 2 * self.ROTATE_SPEED_MAX)
+			right = self.ROTATE_SPEED_MAX + (rotateSpeed * 2* self.ROTATE_SPEED_MAX)
 		else:
 			move = False
 
-			left = -self.ROTATE_SPEED_MAX * rotateSpeed
-			right = self.ROTATE_SPEED_MAX * rotateSpeed
+			left = self.ROTATE_SPEED_MAX * rotateSpeed * 2 
+			right = -self.ROTATE_SPEED_MAX * rotateSpeed * 2
 
-		node.left(left)
-		node.right(right)
+		self._statusAppend('move', 'Y' if move else 'N')
+
+		node.left(min(left, self.ROTATE_SPEED_MAX))
+		node.right(min(right, self.ROTATE_SPEED_MAX))
 
 		if CSV:
 			stamp = node.get_clock().now().to_msg()
@@ -167,6 +236,8 @@ class ModeRotateToPerson():
 
 		if DEBUG:
 			print('{:12.2f} {:12.2f} {:12.2f}      {:b} {:12.4f} {:12.4f}'.format(stampSecond, rotateAzimuth, rotateSpeed, move, left, right))
+
+		self._statusPublish()
 
 		# ... или продолжить жить в этом режиме
 		return self
@@ -183,11 +254,11 @@ class ModeForwardSlow():
 	started = False
 
 	# поймал safety.warning
-	def warning(self, node, msg):
+	def warning(self, msg):
 		pass
 
 	# поймал safety.alarm
-	def alarm(self, node, msg):
+	def alarm(self, msg):
 		self.lastAlarmTime = time.time()
 		self.alarmCount += 1
 
@@ -195,7 +266,7 @@ class ModeForwardSlow():
 			node.get_logger().info('ModeForwardSlow: got alarm count='+ str(self.alarmCount))
 		return
 
-	def cycle(self, node):
+	def cycle(self):
 		# вход в режим. Начало движения
 		if not self.started:
 			if DEBUG:
@@ -232,7 +303,7 @@ class ModeForwardSlow():
 		return self
 
 # Режим "Останов перед препятствием"
-class ModeSafetyStop():
+class ModeSafetyStop(ModeParent):
 	# время последнего safety::alarm
 	lastAlarmTime = None
 
@@ -243,26 +314,36 @@ class ModeSafetyStop():
 		self.lastAlarmTime = time.time()
 
 	# поймал safety.warning
-	def warning(self, node, msg):
+	def warning(self, msg):
 		pass
 
 	# поймал safety.alarm
-	def alarm(self, node, msg):
+	def alarm(self, msg):
 		if DEBUG:
 			node.get_logger().info('ModeSafetyStop: got alarm')
 
 		self.lastAlarmTime = time.time()
 		return
 
-	def cycle(self, node):
+	def cycle(self):
+		self._statusInit()
+		self._statusAppend('mode', 'SafetyStop')
+
 		# выход из стопа в self.out после 2 секунд без safety::alarm
 		if time.time() - self.lastAlarmTime > 2:
 			if DEBUG:
 				node.get_logger().info('ModeSafetyStop: alarm 2 seconds ago. Route to out')
+
+			self._statusAppend('action', 'Route out')
+			self._statusPublish()
+
 			return self.out
 
 		#if DEBUG:
 		#	node.get_logger().info('ModeSafetyStop: continue stay...')
+
+		self._statusAppend('action', 'Waiting')
+		self._statusPublish()
 
 		# ... или продолжить жить в этом режиме
 		return self
@@ -309,6 +390,7 @@ class VedrusControlerNode(Node):
 	def __init__(self):
 		super().__init__('vedrus_control_node')
 
+		self.publisherStatus = self.create_publisher(Status, 'vedrus/status', 10)
 		self.publisherLeft = self.create_publisher(MotorPID, 'vedrus/left/pid', 10)
 		self.publisherRight = self.create_publisher(MotorPID, 'vedrus/right/pid', 10)
 
@@ -340,10 +422,10 @@ class VedrusControlerNode(Node):
 	def safety_callback(self, msg):
 		if msg.warning:
 			if self.mode is not None:
-				self.mode.warning(self, msg)
+				self.mode.warning(msg)
 		if msg.alarm:
 			if self.mode is not None:
-				self.mode.alarm(self, msg)
+				self.mode.alarm(msg)
 
 
 	# task
@@ -360,7 +442,7 @@ class VedrusControlerNode(Node):
 			self.mode.out = ModeForwardSlow()
 
 		# выполню цикл режима. И тот решит какой режим следующий
-		self.mode = self.mode.cycle(self)
+		self.mode = self.mode.cycle()
 
 	def task_stay_and_rotate_to_person(self):
 		# Жду запуска Safety
@@ -372,10 +454,11 @@ class VedrusControlerNode(Node):
 		# начальный режим и его параметры (здесь: роутинг)
 		if self.mode is None:
 			self.mode = ModeSafetyStop()
-			self.mode.out = ModeRotateToPerson(forward=False)
+			self.mode.out = ModeRotateToPerson()
+			self.mode.out.forward = False
 
 		# выполню цикл режима. И тот решит какой режим следующий
-		self.mode = self.mode.cycle(self)
+		self.mode = self.mode.cycle()
 
 	def task_find_person_rotate_and_follow(self):
 		# Жду запуска Safety
@@ -387,10 +470,11 @@ class VedrusControlerNode(Node):
 		# начальный режим и его параметры (здесь: роутинг)
 		if self.mode is None:
 			self.mode = ModeSafetyStop()
-			self.mode.out = ModeRotateToPerson(forward=True)
+			self.mode.out = ModeRotateToPerson()
+			self.mode.out.forward = True
 
 		# выполню цикл режима. И тот решит какой режим следующий
-		self.mode = self.mode.cycle(self)
+		self.mode = self.mode.cycle()
 
 
 	# keepalive
@@ -428,6 +512,8 @@ class VedrusControlerNode(Node):
 
 
 def main(args=None):
+	global node
+
 	rclpy.init(args=args)
 	node = VedrusControlerNode()
 	rclpy.spin(node)

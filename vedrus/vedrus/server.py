@@ -4,7 +4,7 @@ import os
 import rclpy
 from rclpy.node import Node
 import threading
-from vedrus_interfaces.msg import Safety, KeepAlive
+from vedrus_interfaces.msg import Safety, KeepAlive, MotorMove, MotorPID, Status
 
 
 '''
@@ -19,7 +19,18 @@ class ServerNode(Node):
 
 	async def web_status(self, request):
 		data = {
+			'controller': self.controller,
 			'safety': self.safety,
+			'motor': {
+				'left': {
+					'move': self.motorMoveLeft,
+					'pid': self.motorPidLeft,
+				},
+				'right': {
+					'move': self.motorMoveRight,
+					'pid': self.motorPidRight,
+				},
+			},
 		}
 		return web.json_response(data)
 
@@ -51,13 +62,55 @@ class ServerNode(Node):
 		self.web_thread = threading.Thread(target=self.run_server, args=(self.aiohttp_server(),))
 		self.web_thread.start()
 
-		self.create_subscription(
-			Safety,
-			'/vedrus/safety',
-			self.safety_callback,
-			10)
+		self.create_subscription(Safety, '/vedrus/safety', self.safety_callback, 10)
+
+		self.create_subscription(Status, '/vedrus/status', self.status_callback, 10)
+
+		self.create_subscription(MotorMove, '/vedrus/left/move', self.motorMove_left_callback, 10)
+		self.create_subscription(MotorMove, '/vedrus/right/move', self.motorMove_right_callback, 10)
+
+		self.create_subscription(MotorPID, '/vedrus/left/pid', self.motorPID_left_callback, 10)
+		self.create_subscription(MotorPID, '/vedrus/right/pid', self.motorPID_right_callback, 10)
 
 	safety = []
+	motorPidLeft = None
+	motorPidRight = None
+	motorMoveLeft = None
+	motorMoveRight = None
+	controller = None
+
+	def status_callback(self, msg):
+		self.controller = {item.name: item.value for item in msg.items}
+
+	def motorPID_left_callback(self, msg):
+		self.motorPidLeft = {
+			'breaking': msg.breaking,
+			'speed': msg.speed,
+		}
+
+	def motorPID_right_callback(self, msg):
+		self.motorPidRight = {
+			'breaking': msg.breaking,
+			'speed': msg.speed,
+		}
+
+	def motorMove_left_callback(self, msg):
+		self.motorMoveLeft = {
+			'crash': msg.crash,
+			'breaking': msg.breaking,
+			'forward': msg.forward,
+			'power1': msg.power1,
+			'power2': msg.power2,
+		}
+
+	def motorMove_right_callback(self, msg):
+		self.motorMoveRight = {
+			'crash': msg.crash,
+			'breaking': msg.breaking,
+			'forward': msg.forward,
+			'power1': msg.power1,
+			'power2': msg.power2,
+		}
 
 	def safety_callback(self, msg):
 		time = msg.header.stamp.sec + msg.header.stamp.nanosec / 1e9

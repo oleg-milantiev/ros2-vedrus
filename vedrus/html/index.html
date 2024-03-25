@@ -7,53 +7,160 @@
 	<title>Vedrus bot</title>
 </head>
 <body>
+	<table style="width: 100%">
+		<tr>
+			<td id="controller-mode" style="width: 50%"></td>
+			<td id="controller-action" style="width: 50%"></td>
+		</tr>
+		<tr>
+			<td id="controller-rotate" style="width: 50%"></td>
+			<td id="controller-move" style="width: 50%"></td>
+		</tr>
+	</table>
 	<div>
-		<canvas id="safety" width="200" height="200"></canvas>
+		<canvas id="safety" width="400" height="400"></canvas>
 	</div>
+	<table style="width: 100%">
+		<tr>
+			<td id="left" style="width: 50%"></td>
+			<td id="right" style="width: 50%; text-align: right"></td>
+		</tr>
+		<tr>
+			<td id="left-move" style="width: 50%"></td>
+			<td id="right-move" style="width: 50%; text-align: right"></td>
+		</tr>
+	</table>
 
-	<div>
+	<!-- div>
 		<button class="set">Set</button>
 		<input type="text" id="value">
-	</div>
+	</div -->
 
 	<script>
 		document.addEventListener('DOMContentLoaded', function() {
+			function android(ctx, x, y, size) {
+				// Нарисовать верхнюю часть головы
+				ctx.beginPath();
+				ctx.arc(x, y - size * 0.25, size * 0.25, 0, Math.PI * 2);
+				ctx.stroke();
+
+				// Нарисовать тело
+				ctx.beginPath();
+				ctx.moveTo(x, y);
+				ctx.lineTo(x, y + size);
+				ctx.stroke();
+
+				// Нарисовать левую ногу
+				ctx.beginPath();
+				ctx.moveTo(x, y + size);
+				ctx.lineTo(x - size * 0.25, y + size * 1.5);
+				ctx.stroke();
+
+				// Нарисовать правую ногу
+				ctx.beginPath();
+				ctx.moveTo(x, y + size);
+				ctx.lineTo(x + size * 0.25, y + size * 1.5);
+				ctx.stroke();
+
+				// Нарисовать левую руку
+				ctx.beginPath();
+				ctx.moveTo(x - size * 0.25, y + size * 0.25);
+				ctx.lineTo(x, y);
+				ctx.stroke();
+
+				// Нарисовать правую руку
+				ctx.beginPath();
+				ctx.moveTo(x + size * 0.25, y + size * 0.25);
+				ctx.lineTo(x, y);
+				ctx.stroke();
+			}
+
 			function drawSafety(data) {
-				// Шаг 1: Получаем элемент canvas из DOM
 				const canvas = document.getElementById('safety');
 				const ctx = canvas.getContext('2d');
 				ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-				// Размер круга
 				const circleRadius = 3;
 				const centerX = canvas.width / 2; // центр холста по X
 				const centerY = canvas.height / 2; // центр холста по Y
 
 				ctx.beginPath();
-				ctx.arc(centerX, centerY, circleRadius, 0, 2 * Math.PI);
-				ctx.fillStyle = 'red';
+				ctx.arc(centerX, centerY, 100 * 1.5, 0, 2 * Math.PI);
+				ctx.fillStyle = '#F0F0F0';
 				ctx.fill();
 				ctx.closePath();
 
-				// Шаг 2: Пройтись по всем элементам массива и отобразить их на холсте
+				ctx.beginPath();
+				ctx.arc(centerX, centerY, 50 * 1.5, 0, 2 * Math.PI);
+				ctx.fillStyle = '#C0C0C0';
+				ctx.fill();
+				ctx.closePath();
+
+				ctx.beginPath();
+				ctx.moveTo(0, centerY);
+				ctx.strokeStyle = 'gray';
+				ctx.lineTo(canvas.width, centerY);
+				ctx.stroke();
+
+				ctx.beginPath();
+				ctx.moveTo(centerX, 0);
+				ctx.strokeStyle = 'gray';
+				ctx.lineTo(centerX, canvas.height);
+				ctx.stroke();
+
+				if (data.controller != null) {
+					document.getElementById('controller-mode').textContent = data.controller.mode;
+					document.getElementById('controller-action').textContent = data.controller.action;
+					document.getElementById('controller-rotate').textContent = data.controller.rotateSpeed;
+					document.getElementById('controller-move').textContent = data.controller.move;
+				}
+
+				if (data.motor.left.pid != null) {
+					document.getElementById('left').textContent = data.motor.left.pid.speed.toFixed(2);
+
+					ctx.fillStyle = 'green';
+					ctx.fillRect(0, centerY, 25, - data.motor.left.pid.speed / 5. * canvas.height / 2.);
+				}
+
+				if (data.motor.left.move != null) {
+					document.getElementById('left-move').textContent = data.motor.left.move.power1.toFixed(2);
+
+					ctx.fillStyle = 'red';
+					ctx.fillRect(5, centerY, 15, - data.motor.left.move.power1 / 50. * canvas.height / 2.);
+				}
+
+				if (data.motor.right.pid != null) {
+					document.getElementById('right').textContent = data.motor.right.pid.speed.toFixed(2);
+
+					ctx.fillStyle = 'green';
+					ctx.fillRect(canvas.height - 25, centerY, 25, -data.motor.right.pid.speed / 5. * canvas.height / 2.);
+				}
+
+				if (data.motor.right.move != null) {
+					document.getElementById('right-move').textContent = data.motor.right.move.power1.toFixed(2);
+
+					ctx.fillStyle = 'red';
+					ctx.fillRect(canvas.height - 20, centerY, 15, -data.motor.right.move.power1 / 50. * canvas.height / 2.);
+				}
 
 				for (var i in data.safety) {
 					var item = data.safety[i];
-					//console.log(i);
 
-					// Преобразование азимута в радианы
 					const angle = (90 - item.azimuth) * Math.PI / 180;
 
-					// Вычисление координат для рисования круга
-					const x = centerX + item.range * Math.cos(angle);
-					const y = centerY - item.range * Math.sin(angle);
+					const x = centerX + item.range * 1.5 * Math.cos(angle);
+					const y = centerY - item.range * 1.5 * Math.sin(angle);
 
-					// Рисуем круг на холсте
-					ctx.beginPath();
-					ctx.arc(x, y, circleRadius, 0, 2 * Math.PI);
-					ctx.fillStyle = 'black';
-					ctx.fill();
-					ctx.closePath();
+					if (item.id == 'yolo:person') {
+						android(ctx, x, y, 10);
+					}
+					else {
+						ctx.beginPath();
+						ctx.arc(x, y, circleRadius, 0, 2 * Math.PI);
+						ctx.fillStyle = 'black';
+						ctx.fill();
+						ctx.closePath();
+					}
 				}
 			}
 
