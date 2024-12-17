@@ -20,6 +20,7 @@
  * Where SIDE is either VEDL (left) or VEDR (right)
  */
 
+// https://github.com/br3ttb/Arduino-PID-Library
 #include <PID_v1.h>
 #include <HardwareTimer.h>
 
@@ -34,9 +35,9 @@ const int MOTOR_DIR = PA1;  // Direction control pin
 const int MOTOR_PWM = PA0;  // PWM output pin
 
 // Motor control variables
-int32_t targetSpeed = 0;     // Target speed in ticks per second (signed)
-int32_t currentSpeed = 0;    // Current speed in ticks per second (signed)
-double motorPower = 0;      // PWM output (0-255)
+double currentSpeed = 0;    // Current speed in ticks per second
+double targetSpeed = 0;     // Target speed in ticks per second
+double motorPower = 0;      // PWM output (-255 to 255)
 
 // Timer handle for encoder
 HardwareTimer *EncoderTimer = new HardwareTimer(3);
@@ -99,16 +100,15 @@ void loop() {
 
 void calculateSpeed() {
   // Read encoder position using hardware timer
-  long newPosition = EncoderTimer->getCount() - 32767; // Adjust for midpoint offset
+  long newPosition = EncoderTimer->getCount() - 32767;
   
   // Calculate speed in ticks per second
-  long positionDelta = newPosition - lastPosition;
-  currentSpeed = (positionDelta * 1000.0) / SPEED_CALC_INTERVAL; // Convert to ticks per second
+  currentSpeed = ((newPosition - lastPosition) * 1000.0) / SPEED_CALC_INTERVAL;
   lastPosition = newPosition;
 }
 
 void updateMotor() {
-  // Update PID
+  // Update PID and apply to motor
   motorPID.Compute();
   
   // Set direction and power based on calculated motor power

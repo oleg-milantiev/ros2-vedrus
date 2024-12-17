@@ -2,7 +2,7 @@
  * encoder_test.ino - Hardware Encoder Test for STM32 BluePill
  * 
  * This test firmware demonstrates the use of STM32's hardware quadrature encoder interface
- * using Timer4. It prints encoder position via Serial at 115200 baud rate.
+ * using Timer3. It prints encoder position via Serial at 115200 baud rate.
  * 
  * Hardware Setup:
  * Encoder: Timer3 (PA6/PA7)
