@@ -46,7 +46,11 @@ def main():
         read_thread = threading.Thread(target=read_serial, args=(ser,), daemon=True)
         read_thread.start()
         
-        print("Command (S=Stop, 0-9=Speed): ", end='', flush=True)
+        print("Commands:")
+        print("S=Stop, 0-9=Speed")
+        print("P/p=Inc/Dec Kp, I/i=Inc/Dec Ki, D/d=Inc/Dec Kd")
+        print("Q=Quit")
+        print("\nEnter command: ", end='', flush=True)
         
         while True:
             key = get_key()
@@ -56,13 +60,17 @@ def main():
             elif key.lower() == 's':
                 ser.write(b'S\n')
                 print("\rSending: STOP")
-                print("Command (S=Stop, 0-9=Speed): ", end='', flush=True)
             elif key.isdigit():
                 speed = int(key) * 5
                 command = f'M{speed}\n'.encode()
                 ser.write(command)
                 print(f"\rSending: MOVE {speed}")
-                print("Command (S=Stop, 0-9=Speed): ", end='', flush=True)
+            elif key in ['P', 'p', 'I', 'i', 'D', 'd']:
+                param = key.upper()
+                value = 0.1 if key.isupper() else -0.1
+                command = f'{param}{value}\n'.encode()
+                ser.write(command)
+                print(f"\rSending: Adjust {param} by {value}")
                 
     except serial.SerialException as e:
         print(f"Error opening serial port: {e}")

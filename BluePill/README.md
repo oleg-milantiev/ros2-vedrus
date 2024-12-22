@@ -28,7 +28,8 @@ This project implements a DC motor controller using the STM32F103C8T6 (Blue Pill
 
 ### Motor Control
 - Direction → PA1
-- PWM → PA0
+- PWM → PA2
+- Brake → PA0 (TBD)
 
 ## Included Files
 
@@ -77,11 +78,25 @@ This project implements a DC motor controller using the STM32F103C8T6 (Blue Pill
 The controller accepts the following commands through serial port at 115200 baud:
 
 - `S` - Stop motor (sets target speed to 0)
-- `M[speed]` - Move at specified speed (-32768 to 32767 ticks/second)
+- `M[speed]` - Move at specified speed (speed value depends on encoder resolution)
   - Positive values move forward
   - Negative values move reverse
-  - Example: `M1000` sets speed to 1000 ticks/second forward
-  - Example: `M-500` sets speed to 500 ticks/second reverse
+  - Example: `M5` sets speed to 5 units forward
+  - Example: `M-5` sets speed to 5 units reverse
+
+### Python Control Script
+
+The project includes a Python script (`serial_control.py`) for easy motor control:
+
+- Press 'S' to stop the motor
+- Press '0-9' to set different speed levels (multiplied by 5)
+- Press 'Q' to quit the program
+- Real-time status messages are displayed automatically
+
+To run the script:
+```bash
+python3 serial_control.py
+```
 
 ### Status Messages
 
@@ -92,10 +107,17 @@ SIDE,POS:[position],SPD:[current_speed],TGT:[target_speed],PWR:[motor_power]
 
 Where:
 - `SIDE`: "VEDL" for left motor, "VEDR" for right motor
-- `position`: Current encoder position (signed value)
-- `current_speed`: Actual speed in ticks/second (signed)
-- `target_speed`: Commanded speed in ticks/second (signed)
-- `motor_power`: PWM output (-255 to 255)
+- `position`: Current encoder position (signed value, centered at 32767)
+- `current_speed`: Actual speed in ticks/second
+- `target_speed`: Commanded speed
+- `motor_power`: PWM output (-PWR_MAX to PWR_MAX)
+
+## Hardware Configuration
+
+- Encoder resolution: 8192 ticks per wheel revolution
+- Maximum PWM value: 10
+- Speed calculation interval: 50ms
+- LED indication: PC13 lights up when speed exceeds half of encoder resolution
 
 ## Testing Encoder Hardware
 
@@ -176,7 +198,8 @@ This project is released under the MIT License. Feel free to use, modify, and di
 
 ### Управление двигателем
 - Направление → PA1
-- ШИМ → PA0
+- ШИМ → PA2
+- Тормоз → PA0 (TBD)
 
 ## Файлы в проекте
 
@@ -225,25 +248,46 @@ This project is released under the MIT License. Feel free to use, modify, and di
 Контроллер принимает следующие команды через последовательный порт на скорости 115200 бод:
 
 - `S` - Остановка двигателя (устанавливает целевую скорость в 0)
-- `M[скорость]` - Движение с указанной скоростью (-32768 до 32767 тиков/секунду)
+- `M[скорость]` - Движение с указанной скоростью (значение зависит от разрешения энкодера)
   - Положительные значения - движение вперед
   - Отрицательные значения - движение назад
-  - Пример: `M1000` устанавливает скорость 1000 тиков/секунду вперед
-  - Пример: `M-500` устанавливает скорость 500 тиков/секунду назад
+  - Пример: `M5` устанавливает скорость 5 единиц вперед
+  - Пример: `M-5` устанавливает скорость 5 единиц назад
 
-### Сообщения о состоянии
+### Скрипт управления на Python
 
-Контроллер отправляет сообщения о состоянии каждые 50мс в следующем формате:
+В проект включен Python-скрипт (`serial_control.py`) для удобного управления двигателем:
+
+- Нажмите 'S' для остановки двигателя
+- Нажмите '0-9' для установки различных уровней скорости (умножается на 5)
+- Нажмите 'Q' для выхода из программы
+- Сообщения о состоянии отображаются автоматически в реальном времени
+
+Для запуска скрипта:
+```bash
+python3 serial_control.py
 ```
-SIDE,POS:[позиция],SPD:[текущая_скорость],TGT:[целевая_скорость],PWR:[мощность_двигателя]
+
+### Аппаратная конфигурация
+
+- Разрешение энкодера: 8192 тика на оборот колеса
+- Максимальное значение ШИМ: 10
+- Интервал расчета скорости: 50мс
+- Светодиодная индикация: PC13 загорается, когда скорость превышает половину разрешения энкодера
+
+### Status Messages
+
+The controller sends status messages every 50ms in the following format:
+```
+SIDE,POS:[position],SPD:[current_speed],TGT:[target_speed],PWR:[motor_power]
 ```
 
 Где:
-- `SIDE`: "VEDL" для левого двигателя, "VEDR" для правого двигателя
-- `позиция`: Текущая позиция энкодера (со знаком)
-- `текущая_скорость`: Фактическая скорость в тиках/секунду (со знаком)
-- `целевая_скорость`: Заданная скорость в тиках/секунду (со знаком)
-- `мощность_двигателя`: Выход ШИМ (-255 до 255)
+- `SIDE`: "VEDL" для левого мотора, "VEDR" для правого мотора
+- `position`: Текущая позиция энкодера (знаковое значение, центрировано на 32767)
+- `current_speed`: Фактическая скорость в тиках в секунду
+- `target_speed`: Заданная скорость
+- `motor_power`: Выход ШИМ (от -PWR_MAX до PWR_MAX)
 
 ## Тестирование энкодеров
 

@@ -2,22 +2,31 @@
  * BluePill.ino - Motor Controller for Vedrus Robot
  * 
  * This firmware implements a motor controller for the Vedrus robot using STM32 BluePill board.
- * It utilizes hardware quadrature encoder support via Timer4 (pins PB6/PB7) for precise
+ * It utilizes hardware quadrature encoder support via Timer for precise
  * position and speed measurement. The controller implements PID control for motor speed
  * regulation and communicates with the main controller via Serial interface.
  * 
  * Hardware Setup:
- * - Encoder: Timer4 (PB6/PB7) in hardware quadrature mode (4x resolution)
- * - Motor Control: PWM output (PA0) and direction control (PA1)
+ * - Encoder: Timer3 (PA6/PA7) in hardware quadrature mode (4x resolution)
+ * - Motor Control: PWM output (PA2), direction control (PA1), brake control (PA0)
  * - Communication: USB Serial at 115200 baud
  * 
  * Protocol:
  * Commands:
  * - 'S': Stop motor (set target speed to 0)
  * - 'M': Set target speed (followed by signed integer value)
+ * - 'P': Set PID Kp value (followed by float value)
+ * - 'I': Set PID Ki value (followed by float value)
+ * - 'D': Set PID Kd value (followed by float value)
  * 
- * Status Format: SIDE,POS:position,SPD:speed,TGT:target,PWR:power
- * Where SIDE is either VEDL (left) or VEDR (right)
+ * Status Format: SIDE,POS:position,SPD:speed,TGT:target,PWR:power,PID:Kp/Ki/Kd
+ * Where:
+ * - SIDE is either VEDL (left) or VEDR (right)
+ * - position: Current encoder position (ticks)
+ * - speed: Current speed (ticks/second)
+ * - target: Target speed (ticks/second)
+ * - power: Current motor power (-PID_MAX to PID_MAX)
+ * - Kp/Ki/Kd: Current PID parameters
  */
 
 // https://github.com/br3ttb/Arduino-PID-Library
@@ -47,9 +56,12 @@ double motorPower = 0;      // PWM output (-255 to 255)
 HardwareTimer *EncoderTimer = new HardwareTimer(3);
 
 // PID parameters
-double Kp = 0.5;
-double Ki = 0.3;
-double Kd = 0.1;
+//double Kp = 0.5;
+//double Ki = 0.3;
+//double Kd = 0.1;
+double Kp = 0.0;
+double Ki = 0.0;
+double Kd = 0.0;
 
 // Create PID instance
 PID motorPID(&currentSpeed, &motorPower, &targetSpeed, Kp, Ki, Kd, DIRECT);
@@ -128,6 +140,7 @@ void updateMotor() {
 void processSerialCommands() {
   if (Serial.available() > 0) {
     char cmd = Serial.read();
+    delay(5);
     
     switch (cmd) {
       case 'S': // Stop
@@ -135,14 +148,33 @@ void processSerialCommands() {
         break;
         
       case 'M': // Move with signed speed
-        // Wait a bit for the full number to arrive
-        delay(5);
         if (Serial.available()) {
           targetSpeed = Serial.parseInt();
-          // Clear any remaining characters in the buffer
-          while (Serial.available()) {
-            Serial.read();
-          }
+          while (Serial.available()) Serial.read();
+        }
+        break;
+
+      case 'P': // Set Kp
+        if (Serial.available()) {
+          Kp = Serial.parseFloat();
+          motorPID.SetTunings(Kp, Ki, Kd);
+          while (Serial.available()) Serial.read();
+        }
+        break;
+
+      case 'I': // Set Ki
+        if (Serial.available()) {
+          Ki = Serial.parseFloat();
+          motorPID.SetTunings(Kp, Ki, Kd);
+          while (Serial.available()) Serial.read();
+        }
+        break;
+
+      case 'D': // Set Kd
+        if (Serial.available()) {
+          Kd = Serial.parseFloat();
+          motorPID.SetTunings(Kp, Ki, Kd);
+          while (Serial.available()) Serial.read();
         }
         break;
     }
@@ -158,7 +190,13 @@ void sendStatus() {
   Serial.print(",TGT:");
   Serial.print(targetSpeed);
   Serial.print(",PWR:");
-  Serial.println(motorPower);
+  Serial.print(motorPower);
+  Serial.print(",PID:");
+  Serial.print(Kp);
+  Serial.print("/");
+  Serial.print(Ki);
+  Serial.print("/");
+  Serial.println(Kd);
 }
 
 void brightLED() {
