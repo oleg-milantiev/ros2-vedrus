@@ -83,7 +83,7 @@ def main():
                 param = key.upper()
                 increment = 0.1 if key.isupper() else -0.1
                 pid_values[param] += increment
-                command = f'{param}{increment}\n'.encode()
+                command = f'{param}{pid_values[param]}\n'.encode()
                 ser.write(command)
                 print(f"\rSending: Adjust {param} by {increment} (Current value: {pid_values[param]:.2f})")
                 
