@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import serial
+import os
 import sys
 import termios
 import tty
@@ -8,7 +9,7 @@ import threading
 import time
 
 # Configuration
-SERIAL_PORT = '/dev/ttyUSB1'
+SERIAL_PORT = '/dev/ttyUSB0'
 BAUD_RATE = 115200
 
 # Add PID parameter tracking
@@ -43,15 +44,20 @@ def read_serial(ser):
                             pid_values['P'] = p
                             pid_values['I'] = i
                             pid_values['D'] = d
-                print(line, end="     \r")
+                print(f"\r{line.ljust(79)}", end="\r")
             except UnicodeDecodeError:
                 pass
             except serial.SerialException:
                 print("\nSerial connection lost!")
                 break
 
+def printClear(text):
+    print("\r", text.ljust(80))
+
 def main():
     try:
+        os.system('clear')
+
         # Open serial port
         ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
         print(f"Connected to {SERIAL_PORT}")
@@ -73,21 +79,21 @@ def main():
                 break
             elif key.lower() == 's':
                 ser.write(b'S\n')
-                print("\rSending: STOP                                                   ")
+                printClear("\rSending: STOP")
             elif key.isdigit():
-                speed = int(key) * 5
+                speed = int(key) * 500
                 command = f'M{speed}\n'.encode()
                 ser.write(command)
-                print(f"\rSending: MOVE {speed}")
+                printClear(f"\rSending: MOVE {speed}")
             elif key in ['P', 'p', 'I', 'i', 'D', 'd']:
                 param = key.upper()
-                increment = 0.1 if key.isupper() else -0.1
+                increment = 0.001 if key.isupper() else -0.001
                 if (pid_values[param] + increment) >= 0:
                     pid_values[param] += increment
-                    ser.write(f'{param}{pid_values[param]:.2f}\n'.encode())
-                    print(f"\rSending: Adjust {param} by {increment} (Current value: {pid_values[param]:.2f})                  ")
+                    ser.write(f'{param}{pid_values[param]:.3f}\n'.encode())
+                    printClear(f"\rSending: Adjust {param} by {increment} (Current value: {pid_values[param]:.3f})")
                 else:
-                    print(f"\rCannot decrease {param} below 0.0 (Current value: {pid_values[param]:.2f})                ")
+                    printClear(f"\rCannot decrease {param} below 0.0 (Current value: {pid_values[param]:.3f})")
 
     except serial.SerialException as e:
         print(f"Error opening serial port: {e}")
