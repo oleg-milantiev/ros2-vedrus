@@ -1,3 +1,5 @@
+xiaoxiang BMS, прога xiaoxiang
+
 cd /opt/ros/iron
 colcon build --symlink-install --packages-select vedrus vedrus_interfaces
 source /opt/ros/iron/install/local_setup.bash

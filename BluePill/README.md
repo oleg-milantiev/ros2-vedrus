@@ -4,7 +4,7 @@ This project implements a DC motor controller using the STM32F103C8T6 (Blue Pill
 
 ## Features
 
-- Hardware quadrature encoder support using STM32 Timer4
+- Hardware quadrature encoder support using STM32 Timer3
 - 4x resolution encoder counting (both edges of both channels)
 - PID-based motor speed control
 - Serial communication at 115200 baud
@@ -121,15 +121,31 @@ Where:
 
 ## Testing Encoder Hardware
 
-The `encoder_test.ino` firmware can be used to verify proper encoder operation:
+The `Encoder.ino` firmware can be used to verify proper encoder operation:
 
-1. Upload `encoder_test.ino` to the BluePill
+1. Upload `Encoder.ino` to the BluePill
 2. Open Serial Monitor at 115200 baud
-3. Rotate encoders manually or using motors
-4. Monitor the position values for both encoders
-   - Format: `encoder1_position,encoder2_position`
-   - Positive values for forward rotation
-   - Negative values for reverse rotation
+3. Rotate encoder manually or using motor
+4. Monitor the position values
+   - Format: Single number representing encoder position
+   - Values are centered around 0 (internally offset from 32767)
+   - Positive values indicate one direction of rotation
+   - Negative values indicate opposite direction
+   - Updates every 100ms
+
+Example output:
+```
+Hardware Encoder Test Started
+Format: Encoder_Position
+-123
+-145
+-160
+0
+42
+85
+```
+
+Note: The position counter uses Timer3 in hardware quadrature mode with 4x resolution (counting both edges of both channels). The encoder connects to PA6 (Timer3 Channel 1) and PA7 (Timer3 Channel 2).
 
 ## PID Tuning
 
@@ -173,7 +189,7 @@ This project is released under the MIT License. Feel free to use, modify, and di
 
 ## Возможности
 
-- Аппаратная поддержка квадратурного энкодера с использованием таймера STM32 Timer4
+- Аппаратная поддержка квадратурного энкодера с использованием таймера STM32 Timer3
 - Счетчик энкодера с 4-кратным разрешением (обе грани обоих каналов)
 - ПИД-регулирование скорости двигателя
 - Последовательная связь на скорости 115200 бод
@@ -291,15 +307,31 @@ SIDE,POS:[position],SPD:[current_speed],TGT:[target_speed],PWR:[motor_power]
 
 ## Тестирование энкодеров
 
-Прошивка `encoder_test.ino` может быть использована для проверки правильной работы энкодеров:
+Прошивка `Encoder.ino` может быть использована для проверки правильной работы энкодеров:
 
-1. Загрузите `encoder_test.ino` в BluePill
+1. Загрузите `Encoder.ino` в BluePill
 2. Откройте монитор порта на скорости 115200 бод
-3. Вращайте энкодеры вручную или с помощью двигателей
-4. Отслеживайте значения позиций обоих энкодеров
-   - Формат: `позиция_энкодера1,позиция_энкодера2`
-   - Положительные значения при вращении вперед
-   - Отрицательные значения при вращении назад
+3. Вращайте энкодер вручную или с помощью двигателя
+4. Отслеживайте значения позиций энкодера
+   - Формат: Single number representing encoder position
+   - Значения центрированы вокруг 0 (внутренне смещены от 32767)
+   - Положительные значения указывают на одно направление вращения
+   - Отрицательные значения указывают на противоположное направление
+   - Обновляется каждые 100мс
+
+Пример вывода:
+```
+Hardware Encoder Test Started
+Format: Encoder_Position
+-123
+-145
+-160
+0
+42
+85
+```
+
+Примечание: Счетчик позиций использует Timer3 в режиме прямого квадратурного кодирования с 4x разрешением (подсчет обоих фронтов обоих каналов). Энкодер подключен к PA6 (Timer3 Channel 1) и PA7 (Timer3 Channel 2).
 
 ## Настройка ПИД-регулятора
 
