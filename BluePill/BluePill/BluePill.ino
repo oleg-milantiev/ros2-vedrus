@@ -38,8 +38,8 @@ const bool IS_LEFT_SIDE = true;  // Set to false for right side
 const char* SIDE_NAME = IS_LEFT_SIDE ? "VEDL" : "VEDR";
 const int TICKS_WHEEL = 8192;    // Encoder ticks per wheel revolution
 const int MAX_PWM = 20;          // Maximum PWM value for motor control
-const int SPEED_HISTORY_SIZE = 5;  // Size of speed history buffer
-static_assert(SPEED_HISTORY_SIZE % 2 == 1, "SPEED_HISTORY_SIZE must be an odd number");
+//const int SPEED_HISTORY_SIZE = 5;  // Size of speed history buffer
+//static_assert(SPEED_HISTORY_SIZE % 2 == 1, "SPEED_HISTORY_SIZE must be an odd number");
 
 // Pin definitions
 const int LED_PIN = PC13;   // Internal LED pin
@@ -74,8 +74,8 @@ int32_t lastPosition = 0;
 volatile int32_t encoderOverflows = 0;
 
 // Speed history (for median filter)
-double speedHistory[SPEED_HISTORY_SIZE] = {0};  // Buffer for last speed values
-int speedHistoryIndex = 0;  // Current position in circular buffer
+//double speedHistory[SPEED_HISTORY_SIZE] = {0};  // Buffer for last speed values
+//int speedHistoryIndex = 0;  // Current position in circular buffer
 
 void handleEncoderOverflow() {
   // Detect overflow direction
@@ -257,6 +257,7 @@ void brightLED() {
   digitalWrite(LED_PIN, isHighSpeed ? LOW : HIGH);
 }
 
+/*
 double getMedianSpeed() {
   // Create temporary array for sorting
   double tempSpeeds[SPEED_HISTORY_SIZE];
@@ -276,3 +277,4 @@ double getMedianSpeed() {
   // Return middle value
   return tempSpeeds[SPEED_HISTORY_SIZE / 2];
 }
+*/
