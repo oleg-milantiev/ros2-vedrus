@@ -49,6 +49,16 @@ colcon build --symlink-install --packages-select realsense2_camera realsense2_ca
 
 
 
+#i2c2 enable via orangepi-config / system / hardware / ...
+#apt install libi2c-dev
+# поменять шину на 2
+#./build (mpu9250)
+# почему-то у меня не видит магнетометра. И пока хер с ним. Запустил как 6050
+#apt install ros-iron-robot-localization ros-iron-imu-tools
+
+https://github.com/RigacciOrg/py-qmc5883l
+# калибровка
+
 
 
 # ROS2 on Ubuntu via pkg
