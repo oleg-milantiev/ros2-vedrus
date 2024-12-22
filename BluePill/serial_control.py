@@ -82,10 +82,14 @@ def main():
             elif key in ['P', 'p', 'I', 'i', 'D', 'd']:
                 param = key.upper()
                 increment = 0.1 if key.isupper() else -0.1
-                pid_values[param] += increment
-                command = f'{param}{pid_values[param]}\n'.encode()
-                ser.write(command)
-                print(f"\rSending: Adjust {param} by {increment} (Current value: {pid_values[param]:.2f})")
+                new_value = max(0.0, pid_values[param] + increment)  # Prevent negative values
+                if new_value != pid_values[param]:  # Only update if value changed
+                    pid_values[param] = new_value
+                    command = f'{param}{increment}\n'.encode()
+                    ser.write(command)
+                    print(f"\rSending: Adjust {param} by {increment} (Current value: {pid_values[param]:.2f})")
+                else:
+                    print(f"\rCannot decrease {param} below 0.0 (Current value: {pid_values[param]:.2f})")
                 
     except serial.SerialException as e:
         print(f"Error opening serial port: {e}")
