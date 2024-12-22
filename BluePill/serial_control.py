@@ -11,6 +11,9 @@ import time
 SERIAL_PORT = '/dev/ttyUSB0'
 BAUD_RATE = 115200
 
+# Add PID parameter tracking
+pid_values = {'P': 0.0, 'I': 0.0, 'D': 0.0}
+
 def get_key():
     """Get a single keypress from stdin without waiting for enter"""
     fd = sys.stdin.fileno()
@@ -28,8 +31,19 @@ def read_serial(ser):
         if ser.in_waiting:
             try:
                 line = ser.readline().decode('utf-8').strip()
-                print(f"\rReceived: {line}")
-                print("Command (S=Stop, 0-9=Speed): ", end='', flush=True)
+                # Parse PID values from VEDL/VEDR format
+                if line.startswith(('VEDL', 'VEDR')):
+                    # Split the line into sections
+                    sections = line.split(',')
+                    for section in sections:
+                        if section.startswith('PID:'):
+                            # Extract PID values (format: PID:P/I/D)
+                            pid_str = section.split(':')[1]
+                            p, i, d = map(float, pid_str.split('/'))
+                            pid_values['P'] = p
+                            pid_values['I'] = i
+                            pid_values['D'] = d
+                print(f"{line}     \r") 
             except UnicodeDecodeError:
                 pass
             except serial.SerialException:
@@ -67,10 +81,11 @@ def main():
                 print(f"\rSending: MOVE {speed}")
             elif key in ['P', 'p', 'I', 'i', 'D', 'd']:
                 param = key.upper()
-                value = 0.1 if key.isupper() else -0.1
-                command = f'{param}{value}\n'.encode()
+                increment = 0.1 if key.isupper() else -0.1
+                pid_values[param] += increment
+                command = f'{param}{increment}\n'.encode()
                 ser.write(command)
-                print(f"\rSending: Adjust {param} by {value}")
+                print(f"\rSending: Adjust {param} by {increment} (Current value: {pid_values[param]:.2f})")
                 
     except serial.SerialException as e:
         print(f"Error opening serial port: {e}")
