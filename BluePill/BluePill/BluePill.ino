@@ -27,12 +27,16 @@
 // Configuration
 const bool IS_LEFT_SIDE = true;  // Set to false for right side
 const char* SIDE_NAME = IS_LEFT_SIDE ? "VEDL" : "VEDR";
+const int TICKS_WHEEL = 8192;    // Encoder ticks per wheel revolution
+const int MAX_PWM = 10;          // Maximum PWM value for motor control
 
-// Pin definitions - Using Timer4 (PB6/PB7) for hardware encoder
+// Pin definitions
+const int LED_PIN = PC13;   // Internal LED pin
 const int ENCODER_A = PA6;  // Timer 3 Channel 1
 const int ENCODER_B = PA7;  // Timer 3 Channel 2
+const int MOTOR_BRK = PA0;  // Break control pin TBD
 const int MOTOR_DIR = PA1;  // Direction control pin
-const int MOTOR_PWM = PA0;  // PWM output pin
+const int MOTOR_PWM = PA2;  // PWM output pin
 
 // Motor control variables
 double currentSpeed = 0;    // Current speed in ticks per second
@@ -59,6 +63,10 @@ void setup() {
   // Initialize serial communication
   Serial.begin(115200);
   
+  // Configure LED pin
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, HIGH);  // Turn off LED initially (active LOW)
+  
   // Configure motor control pins
   pinMode(MOTOR_DIR, OUTPUT);
   pinMode(MOTOR_PWM, OUTPUT);
@@ -81,7 +89,7 @@ void setup() {
   
   // Configure PID
   motorPID.SetMode(AUTOMATIC);
-  motorPID.SetOutputLimits(-255, 255);
+  motorPID.SetOutputLimits(-MAX_PWM, MAX_PWM);
   motorPID.SetSampleTime(SPEED_CALC_INTERVAL);
 }
 
@@ -93,6 +101,7 @@ void loop() {
   if (millis() - lastSpeedCalc >= SPEED_CALC_INTERVAL) {
     calculateSpeed();
     updateMotor();
+    brightLED();
     sendStatus();
     lastSpeedCalc = millis();
   }
@@ -126,8 +135,14 @@ void processSerialCommands() {
         break;
         
       case 'M': // Move with signed speed
-        if (Serial.available() >= 2) {
+        // Wait a bit for the full number to arrive
+        delay(5);
+        if (Serial.available()) {
           targetSpeed = Serial.parseInt();
+          // Clear any remaining characters in the buffer
+          while (Serial.available()) {
+            Serial.read();
+          }
         }
         break;
     }
@@ -144,4 +159,13 @@ void sendStatus() {
   Serial.print(targetSpeed);
   Serial.print(",PWR:");
   Serial.println(motorPower);
+}
+
+void brightLED() {
+  // Turn on LED if speed is greater than half of TICKS_WHEEL
+  int absSpeed = abs(currentSpeed);
+  bool isHighSpeed = absSpeed > (TICKS_WHEEL / 2);
+  
+  // PC13 is active LOW on BluePill, so use LOW for ON
+  digitalWrite(LED_PIN, isHighSpeed ? LOW : HIGH);
 }
