@@ -58,8 +58,8 @@ double motorPower = 0;      // PWM output (-MAX_PWM to MAX_PWM)
 HardwareTimer *EncoderTimer = new HardwareTimer(3);
 
 // PID parameters
-double Kp = 0.0;
-double Ki = 0.0;
+double Kp = 0.006;
+double Ki = 0.017;
 double Kd = 0.0;
 
 // Create PID instance
