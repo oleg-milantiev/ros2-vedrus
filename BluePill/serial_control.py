@@ -1,12 +1,24 @@
 #!/usr/bin/env python3
 
+''' 
+This script controls the BluePill microcontroller via a serial interface.
+It allows for real-time command input to adjust PID parameters and control speed.
+
+Key Commands:
+S = Stop the motor
+0-9 = Set speed (0-4500 RPM, where each digit corresponds to 500 RPM)
+P/p = Increase/Decrease Kp (Proportional gain)
+I/i = Increase/Decrease Ki (Integral gain)
+D/d = Increase/Decrease Kd (Derivative gain)
+Q = Quit the program
+'''
+
 import serial
 import os
 import sys
 import termios
 import tty
 import threading
-import time
 
 # Configuration
 SERIAL_PORT = '/dev/ttyUSB0'
