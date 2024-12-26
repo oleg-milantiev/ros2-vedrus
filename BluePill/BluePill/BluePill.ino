@@ -31,15 +31,16 @@
 
 // https://github.com/br3ttb/Arduino-PID-Library
 #include <PID_v1.h>
+#include <Wire.h>
 #include <HardwareTimer.h>
+
+#define SLAVE_ADDRESS 0x08  // STM32 I2C address
 
 // Configuration
 const bool IS_LEFT_SIDE = true;  // Set to false for right side
 const char* SIDE_NAME = IS_LEFT_SIDE ? "VEDL" : "VEDR";
-const int TICKS_WHEEL = 8192;    // Encoder ticks per wheel revolution
+const int TICKS_WHEEL = 16384;    // Encoder ticks per wheel revolution
 const int MAX_PWM = 20;          // Maximum PWM value for motor control
-//const int SPEED_HISTORY_SIZE = 5;  // Size of speed history buffer
-//static_assert(SPEED_HISTORY_SIZE % 2 == 1, "SPEED_HISTORY_SIZE must be an odd number");
 
 // Pin definitions
 const int LED_PIN = PC13;   // Internal LED pin
@@ -55,11 +56,11 @@ double targetSpeed = 0;     // Target speed in ticks per second
 double motorPower = 0;      // PWM output (-MAX_PWM to MAX_PWM)
 
 // Timer handle for encoder
-HardwareTimer *EncoderTimer = new HardwareTimer(3);
+HardwareTimer *EncoderTimer = new HardwareTimer(TIM3);
 
 // PID parameters
-double Kp = 0.006;
-double Ki = 0.017;
+double Kp = 0.01;
+double Ki = 0.03;
 double Kd = 0.0;
 
 // Create PID instance
@@ -73,10 +74,6 @@ int32_t lastPosition = 0;
 // Encoder overflow tracking
 volatile int32_t encoderOverflows = 0;
 
-// Speed history (for median filter)
-//double speedHistory[SPEED_HISTORY_SIZE] = {0};  // Buffer for last speed values
-//int speedHistoryIndex = 0;  // Current position in circular buffer
-
 void handleEncoderOverflow() {
   // Detect overflow direction
   if (EncoderTimer->getCount() < 32767) {
@@ -86,10 +83,28 @@ void handleEncoderOverflow() {
   }
 }
 
+void receiveEvent(int howMany) {
+    while (Wire.available()) {
+        char received = Wire.read();  // Read data from Orange Pi
+        Serial.print("Received: ");
+        Serial.println(received);
+    }
+}
+
+void requestEvent() {
+    Wire.write("STM32 OK");  // Send data to Orange Pi
+}
+
 void setup() {
+  // Initialize STM32 as I2C slave
+  Wire.begin(SLAVE_ADDRESS);
+  Wire.onReceive(receiveEvent);
+  Wire.onRequest(requestEvent);
+  
   // Initialize serial communication
   Serial.begin(115200);
-  
+  while (!Serial) {}
+
   // Configure LED pin
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, HIGH);  // Turn off LED initially (active LOW)
@@ -102,21 +117,46 @@ void setup() {
   pinMode(ENCODER_A, INPUT_PULLUP);
   pinMode(ENCODER_B, INPUT_PULLUP);
   
-  // Configure Timer4 for hardware encoder mode
   EncoderTimer->pause();
-  EncoderTimer->setMode(1, TIMER_ENCODER); // Channel 1
-  EncoderTimer->setMode(2, TIMER_ENCODER); // Channel 2
-  
-  // Set encoder to count both edges for better resolution
-  EncoderTimer->setPrescaleFactor(1);
+
+  // Configure Timer3 for hardware encoder mode
+  TIM_HandleTypeDef *htim3 = EncoderTimer->getHandle();
+  __HAL_RCC_TIM3_CLK_ENABLE();
+
+  htim3->Instance = TIM3;
+  htim3->Init.Prescaler = 0; // No prescaler
+  htim3->Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim3->Init.Period = 65535; // Maximum count
+  htim3->Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+
+  // Initialize the encoder configuration structure
+  TIM_Encoder_InitTypeDef encoderConfig = {
+      .EncoderMode = TIM_ENCODERMODE_TI12,          // 4x resolution
+      .IC1Polarity = TIM_ICPOLARITY_RISING,
+      .IC1Selection = TIM_ICSELECTION_DIRECTTI,
+      .IC1Prescaler = TIM_ICPSC_DIV1,
+      .IC1Filter = 0,
+      .IC2Polarity = TIM_ICPOLARITY_RISING,
+      .IC2Selection = TIM_ICSELECTION_DIRECTTI,
+      .IC2Prescaler = TIM_ICPSC_DIV1,
+      .IC2Filter = 0};
+
+  // Pass the address of the properly initialized structure
+  if (HAL_TIM_Encoder_Init(htim3, &encoderConfig) != HAL_OK) {
+    Serial.println("Error initializing encoder!");
+    while (1); // Halt execution if encoder initialization fails
+  }
+
+  HAL_TIM_Encoder_Start(htim3, TIM_CHANNEL_ALL);
+
   EncoderTimer->setCount(0);     // Start at zero
   
   // Enable overflow interrupts
   EncoderTimer->setOverflow(65535);
-  EncoderTimer->attachInterrupt(0, handleEncoderOverflow);
-  
+  EncoderTimer->attachInterrupt(handleEncoderOverflow);
+
   EncoderTimer->resume();
-  
+
   // Configure PID
   motorPID.SetMode(AUTOMATIC);
   motorPID.SetOutputLimits(-MAX_PWM, MAX_PWM);
@@ -149,18 +189,6 @@ void calculateSpeed() {
 
   currentSpeed = ((newPosition - lastPosition) * 1000.0) / SPEED_CALC_INTERVAL;
   
-/*
-  // Calculate speed in ticks per second
-  double rawSpeed = ((newPosition - lastPosition) * 1000.0) / SPEED_CALC_INTERVAL;
-
-  // Store speed in circular buffer
-  speedHistory[speedHistoryIndex] = rawSpeed;
-  speedHistoryIndex = (speedHistoryIndex + 1) % SPEED_HISTORY_SIZE;
-  
-  // Use median filtered speed
-  currentSpeed = getMedianSpeed();
-*/
-
   lastPosition = newPosition;
 }
 
@@ -256,25 +284,3 @@ void brightLED() {
   // PC13 is active LOW on BluePill, so use LOW for ON
   digitalWrite(LED_PIN, isHighSpeed ? LOW : HIGH);
 }
-
-/*
-double getMedianSpeed() {
-  // Create temporary array for sorting
-  double tempSpeeds[SPEED_HISTORY_SIZE];
-  memcpy(tempSpeeds, speedHistory, sizeof(speedHistory));
-  
-  // Sort speeds using bubble sort (efficient enough for small arrays)
-  for (int i = 0; i < SPEED_HISTORY_SIZE - 1; i++) {
-    for (int j = 0; j < SPEED_HISTORY_SIZE - 1 - i; j++) {
-      if (tempSpeeds[j] > tempSpeeds[j + 1]) {
-        double temp = tempSpeeds[j];
-        tempSpeeds[j] = tempSpeeds[j + 1];
-        tempSpeeds[j + 1] = temp;
-      }
-    }
-  }
-  
-  // Return middle value
-  return tempSpeeds[SPEED_HISTORY_SIZE / 2];
-}
-*/
