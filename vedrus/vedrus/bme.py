@@ -57,28 +57,27 @@ ros2 launch <your_package_name> bme280_launch.py
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Temperature, RelativeHumidity, FluidPressure
-import adafruit_bme280
-import board
-import busio
+import smbus2
+import bme280
 
 class BME280Publisher(Node):
     def __init__(self):
         super().__init__('bme280_publisher')
 
         # Declare parameters
-        self.declare_parameter('i2c_bus', 1)
+        self.declare_parameter('i2c_bus', 2)
         self.declare_parameter('i2c_address', 0x76)
         self.declare_parameter('topic_name', 'bme280_data')
 
         # Retrieve parameters
         i2c_bus_number = self.get_parameter('i2c_bus').get_parameter_value().integer_value
-        i2c_address = self.get_parameter('i2c_address').get_parameter_value().integer_value
+        self.i2c_address = self.get_parameter('i2c_address').get_parameter_value().integer_value
         topic_name = self.get_parameter('topic_name').get_parameter_value().string_value
 
         # Initialize I2C and BME280 sensor
         try:
-            i2c = busio.I2C(board.SCL, board.SDA)
-            self.sensor = adafruit_bme280.Adafruit_BME280_I2C(i2c, address=i2c_address)
+            self.bus = smbus2.SMBus(i2c_bus_number)
+            self.calibration_params = bme280.load_calibration_params(self.bus, self.i2c_address)
         except Exception as e:
             self.get_logger().error(f"Failed to initialize BME280 sensor: {e}")
             self.destroy_node()
@@ -94,32 +93,30 @@ class BME280Publisher(Node):
 
     def publish_sensor_data(self):
         try:
-            temperature = self.sensor.temperature
-            humidity = self.sensor.humidity
-            pressure = self.sensor.pressure * 100  # Convert hPa to Pa
+            data = bme280.sample(self.bus, self.i2c_address, self.calibration_params)
 
             # Publish temperature
             temp_msg = Temperature()
-            temp_msg.temperature = temperature
+            temp_msg.temperature = data.temperature
             temp_msg.variance = 0.0  # Set variance as 0 (default)
             self.publisher_temperature.publish(temp_msg)
 
             # Publish humidity
             humidity_msg = RelativeHumidity()
-            humidity_msg.relative_humidity = humidity / 100.0  # Convert percentage to fraction
+            humidity_msg.relative_humidity = data.humidity / 100.0  # Convert percentage to fraction
             humidity_msg.variance = 0.0  # Set variance as 0 (default)
             self.publisher_humidity.publish(humidity_msg)
 
             # Publish pressure
             pressure_msg = FluidPressure()
-            pressure_msg.fluid_pressure = pressure
+            pressure_msg.fluid_pressure = data.pressure
             pressure_msg.variance = 0.0  # Set variance as 0 (default)
             self.publisher_pressure.publish(pressure_msg)
 
-            self.get_logger().info("Published BME280 data: "
-                                   f"Temp: {temperature:.2f} °C, "
-                                   f"Humidity: {humidity:.2f} %, "
-                                   f"Pressure: {pressure:.2f} Pa")
+#            self.get_logger().info("Published BME280 data: "
+#                                   f"Temp: {temperature:.2f} °C, "
+#                                   f"Humidity: {humidity:.2f} %, "
+#                                   f"Pressure: {pressure:.2f} Pa")
 
         except Exception as e:
             self.get_logger().error(f"Failed to read or publish sensor data: {e}")
