@@ -24,10 +24,10 @@ def generate_launch_description():
             executable='ads1115_node',
             name='ads1115_node',
             parameters=[
-                {'i2c_bus': 1},
+                {'i2c_bus': 2},
                 {'i2c_address': 72},
-                {'adc_channels': ['channel_0', 'channel_1']},
-                {'adc_gains': ['1', '2/3']},
+                {'adc_channels': ['channel_0', 'channel_1', 'channel_2', 'channel_3']},
+                {'adc_gains': ['1', '2/3', '1', '1']},
                 {'topic_name': '/adc_values'},
             ]
         )
@@ -56,20 +56,17 @@ ros2 run your_package_name ads1115_node
 
 import rclpy
 from rclpy.node import Node
-from adafruit_ads1x15.ads1115 import ADS1115
-from adafruit_ads1x15.analog_in import AnalogIn
-import board
-import busio
+import Adafruit_ADS1x15
 
 class ADS1115Node(Node):
     def __init__(self):
         super().__init__('ads1115_node')
 
         # Declare parameters
-        self.declare_parameter('i2c_bus', 1)
+        self.declare_parameter('i2c_bus', 2)
         self.declare_parameter('i2c_address', 0x48)
         self.declare_parameter('adc_channels', ['channel_0', 'channel_1'])
-        self.declare_parameter('adc_gains', ['1', '2/3'])
+        self.declare_parameter('adc_gains', ['1', '2/3', '1', '1'])
         self.declare_parameter('topic_name', '/adc_values')
 
         # Get parameters
@@ -80,19 +77,22 @@ class ADS1115Node(Node):
         topic_name = self.get_parameter('topic_name').get_parameter_value().string_value
 
         # Initialize I2C and ADS1115
-        i2c = busio.I2C(board.SCL, board.SDA, bus=i2c_bus)
-        self.ads = ADS1115(i2c, address=i2c_address)
+        self.adc = Adafruit_ADS1x15.ADS1115(address=i2c_address, busnum=i2c_bus)
 
         # Map gains to ADS1115 gain configuration
-        self.gain_map = {
-            '2/3': ADS1115.GAIN_TWOTHIRDS,
-            '1': ADS1115.GAIN_ONE,
-            '2': ADS1115.GAIN_TWO,
-            '4': ADS1115.GAIN_FOUR,
-            '8': ADS1115.GAIN_EIGHT,
-            '16': ADS1115.GAIN_SIXTEEN,
-        }
+        # Choose a gain of 1 for reading voltages from 0 to 4.09V.
+        # Or pick a different gain to change the range of voltages that are read:
+        #  - 2/3 = +/-6.144V
+        #  -   1 = +/-4.096V
+        #  -   2 = +/-2.048V
+        #  -   4 = +/-1.024V
+        #  -   8 = +/-0.512V
+        #  -  16 = +/-0.256V
+        # See table 3 in the ADS1015/ADS1115 datasheet for more info on gain.
+        self.allowed_gains = ['2/3', '1', '2', '4', '8', '16']
 
+        #TBD
+        '''
         # Configure ADS1115 channels and gains
         self.analog_inputs = []
         for i, channel_name in enumerate(adc_channels):
@@ -102,12 +102,13 @@ class ADS1115Node(Node):
             else:
                 gain = adc_gains[i]
 
-            if gain not in self.gain_map:
+            if gain not in self.allowed_gains:
                 self.get_logger().error(f"Invalid gain '{gain}' for channel {channel_name}, using default gain '1'.")
                 gain = '1'
 
             self.ads.gain = self.gain_map[gain]
             self.analog_inputs.append(AnalogIn(self.ads, getattr(ADS1115, f'P{i}')))
+        '''
 
         # Create a topic publisher
         self.publisher = self.create_publisher(dict, topic_name, 10)
@@ -116,12 +117,20 @@ class ADS1115Node(Node):
         self.timer = self.create_timer(1.0, self.publish_adc_values)
 
     def publish_adc_values(self):
+        GAIN = 1
+
+        values = [0]*4
+        for i in range(4):
+            values[i] = self.adc.read_adc(i, gain=GAIN)
+
+        print(values)
+        sys.exit()
+
         adc_values = {}
         for i, analog_input in enumerate(self.analog_inputs):
             adc_values[f'channel_{i}'] = analog_input.voltage
 
         self.publisher.publish(adc_values)
-        self.get_logger().info(f"Published ADC values: {adc_values}")
 
 
 def main(args=None):
