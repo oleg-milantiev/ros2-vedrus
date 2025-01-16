@@ -26,6 +26,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
     "msg/Safety.msg"
     "msg/KeepAlive.msg"
     "msg/Sonar.msg"
+    "msg/Voltage.msg"
     "msg/Status.msg"
     "msg/StatusItem.msg"
     DEPENDENCIES std_msgs
