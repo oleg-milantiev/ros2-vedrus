@@ -1,6 +1,4 @@
 """
-TODO not tested yet
-
 ROS2 Node for Reading Four HC-SR04 Sonar Sensors via Sysfs and Publishing Data
 
 This script reads data from four HC-SR04 sonar sensors using sysfs interfaces and publishes
@@ -29,6 +27,7 @@ echo in > /sys/class/gpio/gpio<echo_pin>/direction
 ```
 3. Create a launch file (example below).
 4. Run the launch file with `ros2 launch`.
+5. Alternative use ros2 run your_package hcsr04 --ros-args -p pin_numbers:="[127, 125, 124, 144, 122, 120, 123, 121]"
 
 # ROS2 Launch File Example (Python Style):
 ```python
@@ -42,7 +41,7 @@ def generate_launch_description():
             executable='sonar_node',
             name='sonar_node',
             parameters=[
-                {'pin_numbers': [4, 17, 27, 22]},  # Example GPIO pins
+                {'pin_numbers': [127, 125, 124, 144, 122, 120, 123, 121]},  # Example GPIO pins
                 {'topic_name': 'sonar_data'},
             ]
         ),
@@ -66,9 +65,9 @@ class SonarNode(Node):
         super().__init__('sonar_node')
 
         # Declare and get parameters
-        self.declare_parameter('pin_numbers', [4, 17, 27, 22])
+        self.declare_parameter('pin_numbers', [127, 125, 124, 144, 122, 120, 123, 121])
         self.declare_parameter('topic_name', 'sonar_data')
-        
+
         self.pin_numbers = self.get_parameter('pin_numbers').get_parameter_value().integer_array_value
         self.topic_name = self.get_parameter('topic_name').get_parameter_value().string_value
 
@@ -82,7 +81,7 @@ class SonarNode(Node):
 
         # Create publisher
         self.publisher_ = self.create_publisher(Range, self.topic_name, 10)
-        self.timer = self.create_timer(0.1, self.read_sonars)  # 10 Hz timer
+        self.timer = self.create_timer(0.5, self.read_sonars)  # 2 Hz timer
 
     def _export_pin(self, pin, direction):
         gpio_path = f"/sys/class/gpio/gpio{pin}"
@@ -100,38 +99,47 @@ class SonarNode(Node):
         with open(f"/sys/class/gpio/gpio{pin}/value", "r") as f:
             return int(f.read().strip())
 
+    def read_sonar(self, trig, echo):
+        # Trigger the sonar
+        self._write_gpio(trig, 1)
+        time.sleep(0.00001)
+        self._write_gpio(trig, 0)
+
+        # Measure the echo pulse duration
+        start_time = time.time()
+        timeout = start_time + 0.1
+
+        while self._read_gpio(echo) == 0:
+            start_time = time.time()
+            if start_time > timeout:
+                return -1
+
+        stop_time = time.time()
+        while self._read_gpio(echo) == 1:
+            stop_time = time.time()
+            if stop_time > timeout:
+                return -1
+
+        # Calculate distance (in meters)
+        time_elapsed = stop_time - start_time
+        return (time_elapsed * 34300) / 2  # Speed of sound = 34300 cm/s
+
     def read_sonars(self):
         for i, (trig, echo) in enumerate(zip(self.trig_pins, self.echo_pins)):
-            # Trigger the sonar
-            self._write_gpio(trig, 1)
-            time.sleep(0.00001)
-            self._write_gpio(trig, 0)
+            distance = self.read_sonar(trig, echo)
 
-            # Measure the echo pulse duration
-            start_time = time.time()
-            stop_time = time.time()
+            if distance > 0:
+                # Publish the Range message
+                range_msg = Range()
+                range_msg.header.stamp = self.get_clock().now().to_msg()
+                range_msg.header.frame_id = f'sonar_{i}'
+                range_msg.radiation_type = Range.ULTRASOUND
+                range_msg.field_of_view = 0.05  # Example FOV in radians
+                range_msg.min_range = 0.02  # Minimum measurable range in meters
+                range_msg.max_range = 4.0  # Maximum measurable range in meters
+                range_msg.range = distance / 100.0  # Convert cm to meters
 
-            while self._read_gpio(echo) == 0:
-                start_time = time.time()
-
-            while self._read_gpio(echo) == 1:
-                stop_time = time.time()
-
-            # Calculate distance (in meters)
-            time_elapsed = stop_time - start_time
-            distance = (time_elapsed * 34300) / 2  # Speed of sound = 34300 cm/s
-
-            # Publish the Range message
-            range_msg = Range()
-            range_msg.header.stamp = self.get_clock().now().to_msg()
-            range_msg.header.frame_id = f'sonar_{i}'
-            range_msg.radiation_type = Range.ULTRASOUND
-            range_msg.field_of_view = 0.05  # Example FOV in radians
-            range_msg.min_range = 0.02  # Minimum measurable range in meters
-            range_msg.max_range = 4.0  # Maximum measurable range in meters
-            range_msg.range = distance / 100.0  # Convert cm to meters
-
-            self.publisher_.publish(range_msg)
+                self.publisher_.publish(range_msg)
 
     def destroy_node(self):
         super().destroy_node()
