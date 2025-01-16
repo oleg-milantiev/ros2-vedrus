@@ -1,6 +1,4 @@
 '''
-TODO not yet tested
-
 This ROS2 node reads temperature, humidity, and pressure data from a BME280 sensor
 connected via I2C and publishes the readings to ROS2 topics. The I2C bus number, 
 sensor address, and topic name are configurable via ROS2 parameters.
@@ -8,11 +6,11 @@ sensor address, and topic name are configurable via ROS2 parameters.
 Dependencies:
 - ROS2 Foxy or newer
 - Python 3.6 or newer
-- Adafruit CircuitPython BME280 library
-  Install using: `pip install adafruit-circuitpython-bme280`
+- Richard Hull BME280 library
+  Install using: `pip install bme280`
 
 ROS2 Parameters:
-- i2c_bus (int): I2C bus number to use (default: 1)
+- i2c_bus (int): I2C bus number to use (default: 2)
 - i2c_address (int): I2C address of the BME280 sensor (default: 0x76)
 - topic_name (str): Base name of the ROS2 topic to publish data (default: 'bme280_data')
 
@@ -43,7 +41,7 @@ def generate_launch_description():
          name='bme280_publisher',
          output='screen',
          parameters=[
-             {'i2c_bus': 1},
+             {'i2c_bus': 2},
              {'i2c_address': 0x76},
              {'topic_name': 'custom_bme280_data'}
          ]
@@ -112,11 +110,6 @@ class BME280Publisher(Node):
             pressure_msg.fluid_pressure = data.pressure
             pressure_msg.variance = 0.0  # Set variance as 0 (default)
             self.publisher_pressure.publish(pressure_msg)
-
-#            self.get_logger().info("Published BME280 data: "
-#                                   f"Temp: {temperature:.2f} °C, "
-#                                   f"Humidity: {humidity:.2f} %, "
-#                                   f"Pressure: {pressure:.2f} Pa")
 
         except Exception as e:
             self.get_logger().error(f"Failed to read or publish sensor data: {e}")
