@@ -1,6 +1,4 @@
 '''
-TODO not yet tested
-
 ADS1115 ROS2 Node
 
 This ROS2 node reads analog-to-digital conversion values from an ADS1115 ADC sensor over I2C and publishes the values to a ROS2 topic.
@@ -10,6 +8,7 @@ Parameters:
 - `i2c_address` (int): The I2C address of the ADS1115 sensor (e.g., 0x48).
 - `adc_channels` (list of str): Names of the ADC channels to read (e.g., ['channel_0', 'channel_1']).
 - `adc_gains` (list of str): Gain configuration for each channel (e.g., ['1', '2/3']).
+- `adc_gains` (list of float): Dividers configuration for each channel (e.g., [1, 1.5]).
 - `topic_name` (str): The name of the ROS2 topic to publish ADC values (e.g., '/adc_values').
 
 ROS2 Launch Example:
@@ -25,9 +24,10 @@ def generate_launch_description():
             name='ads1115_node',
             parameters=[
                 {'i2c_bus': 2},
-                {'i2c_address': 72},
+                {'i2c_address': 0x48},
                 {'adc_channels': ['channel_0', 'channel_1', 'channel_2', 'channel_3']},
                 {'adc_gains': ['1', '2/3', '1', '1']},
+                {'adc_dividers': [1, 1.5, 0.75, 3]},
                 {'topic_name': '/adc_values'},
             ]
         )
@@ -36,8 +36,7 @@ def generate_launch_description():
 
 Install Required Modules:
 ```bash
-pip install adafruit-circuitpython-ads1x15
-pip install rclpy
+pip3 install adafruit-ads1x15
 ```
 
 ADC Gain Configuration Options:
