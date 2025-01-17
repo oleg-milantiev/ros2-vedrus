@@ -21,6 +21,7 @@ setup(
 	entry_points={
 		'console_scripts': [
 			'ardu = vedrus.ardu:main',
+			'bluepill = vedrus.bluepill:main',
 #			'gyro = vedrus.gyro:main',
 #			'test = vedrus.test:main',
 			'controller = vedrus.controller:main',
@@ -28,6 +29,10 @@ setup(
 			'screen = vedrus.screen:main',
 			'safety = vedrus.safety:main',
 			'server = vedrus.server:main',
+			'qmc5883l = vedrus.qmc5883l:main',
+			'ads1115 = vedrus.ads1115:main',
+			'bme = vedrus.bme:main',
+			'sonar = vedrus.sonar:main',
 		],
 	},
 )
