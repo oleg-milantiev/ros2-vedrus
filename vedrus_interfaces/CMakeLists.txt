@@ -20,15 +20,14 @@ find_package(ament_cmake REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
-    "msg/Motor.msg"
-    "msg/MotorMove.msg"
-    "msg/MotorPID.msg"
-    "msg/Safety.msg"
     "msg/KeepAlive.msg"
+    "msg/MotorStatus.msg"
+    "msg/MotorCommand.msg"
+    "msg/Safety.msg"
     "msg/Sonar.msg"
-    "msg/Voltage.msg"
     "msg/Status.msg"
     "msg/StatusItem.msg"
+    "msg/Voltage.msg"
     DEPENDENCIES std_msgs
  )
 ament_export_dependencies(rosidl_default_runtime)
