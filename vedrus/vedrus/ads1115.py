@@ -1,4 +1,6 @@
 '''
+TODO 2/3 gain
+
 ADS1115 ROS2 Node
 
 This ROS2 node reads analog-to-digital conversion values from an ADS1115 ADC sensor over I2C and publishes the values to a ROS2 topic.
@@ -27,7 +29,7 @@ def generate_launch_description():
                 {'i2c_address': 0x48},
                 {'adc_channels': ['channel_0', 'channel_1', 'channel_2', 'channel_3']},
                 {'adc_gains': ['1', '2/3', '1', '1']},
-                {'adc_dividers': [1, 1.5, 0.75, 3]},
+                {'adc_dividers': [1., 1.5, 0.75, 3.]},
                 {'topic_name': '/adc_values'},
             ]
         )
@@ -129,7 +131,7 @@ class ADS1115Node(Node):
 
             self.publisher.publish(msg)
 
-            self.get_logger().info(f"Published: channel={channel_name}, voltage={scaled_voltage:.3f} V")
+#            self.get_logger().info(f"Published: channel={channel_name}, voltage={scaled_voltage:.3f} V")
 
 
 def main(args=None):
