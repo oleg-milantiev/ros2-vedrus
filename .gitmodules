@@ -1,0 +1,3 @@
+[submodule "hmc5883l_ros2"]
+	path = hmc5883l_ros2
+	url = https://github.com/E12-CO/hmc5883l_ros2.git
