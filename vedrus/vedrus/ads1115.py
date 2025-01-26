@@ -68,9 +68,12 @@ class ADS1115Node(Node):
         # Declare parameters
         self.declare_parameter('i2c_bus', 2)
         self.declare_parameter('i2c_address', 0x48)
-        self.declare_parameter('adc_channels', ['channel_0', 'channel_1'])
-        self.declare_parameter('adc_gains', ['1', '1'])
-        self.declare_parameter('adc_dividers', [1.0, 1.0])
+        self.declare_parameter('adc_channels', ['motor_left'])
+        self.declare_parameter('adc_gains', ['1'])
+        self.declare_parameter('adc_dividers', [1.0])
+#        self.declare_parameter('adc_channels', ['channel_0', 'channel_1'])
+#        self.declare_parameter('adc_gains', ['1', '1'])
+#        self.declare_parameter('adc_dividers', [1.0, 1.0])
         self.declare_parameter('topic_name', '/adc_values')
 
         # Get parameters
@@ -105,7 +108,7 @@ class ADS1115Node(Node):
         self.publisher = self.create_publisher(Voltage, topic_name, 10)
 
         # Create a timer to read and publish ADC values
-        self.timer = self.create_timer(1.0, self.publish_adc_values)
+        self.timer = self.create_timer(.1, self.publish_adc_values)
 
     def publish_adc_values(self):
         for i, channel_name in enumerate(self.adc_channels):
