@@ -52,18 +52,17 @@ class SonarNode(Node):
         super().__init__('sonar_node')
 
         # Declare and get parameters
-        self.declare_parameter('pin_numbers', [127, 125, 124, 144, 122, 120, 123, 121])
+        self.declare_parameter('pins_trig', [127, 125, 124, 144])
+        self.declare_parameter('pins_echo', [122, 120, 123, 121])
         self.declare_parameter('topic_name', 'sonar_data')
         self.declare_parameter('names', ['sensor1', 'sensor2', 'sensor3', 'sensor4'])
 
-        self.pin_numbers = self.get_parameter('pin_numbers').get_parameter_value().integer_array_value
+        self.trig_pins = self.get_parameter('pins_trig').get_parameter_value().integer_array_value
+        self.echo_pins = self.get_parameter('pins_echo').get_parameter_value().integer_array_value
         self.topic_name = self.get_parameter('topic_name').get_parameter_value().string_value
         self.names = self.get_parameter('names').get_parameter_value().string_array_value
 
-        self.trig_pins = self.pin_numbers[:len(self.pin_numbers)//2]
-        self.echo_pins = self.pin_numbers[len(self.pin_numbers)//2:]
-
-        # Export GPIO pins and configure direction
+        # Export GPIO pins and configure direction for each sensor
         for trig, echo in zip(self.trig_pins, self.echo_pins):
             self._export_pin(trig, "out")
             self._export_pin(echo, "in")
@@ -121,9 +120,8 @@ class SonarNode(Node):
                 # Publish the Range message
                 range_msg = Range()
                 range_msg.header.stamp = self.get_clock().now().to_msg()
-                range_msg.header.frame_id = f'sonar_{i}'
+                range_msg.header.frame_id = self.names[i]
                 range_msg.radiation_type = Range.ULTRASOUND
-                range_msg.header.frame_id = f'sonar_{i}'
                 range_msg.min_range = 0.02  # Minimum measurable range in meters
                 range_msg.max_range = 4.0  # Maximum measurable range in meters
                 range_msg.range = distance / 100.0  # Convert cm to meters
