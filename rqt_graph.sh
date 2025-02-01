@@ -7,5 +7,5 @@ export DISPLAY=192.168.2.70:0
 cd /opt/ros/iron
 source ./setup.bash
 
-ros2 run rviz2 rviz2
+ros2 run rqt_graph rqt_graph
 
