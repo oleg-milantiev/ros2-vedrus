@@ -129,3 +129,5 @@ tigervncserver -localhost no
 
 
 
+Orange Pi 3B (там же pinout)
+http://www.orangepi.org/html/hardWare/computerAndMicrocontrollers/details/Orange-Pi-3B.html
