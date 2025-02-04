@@ -28,7 +28,7 @@ ros2 run <your_package_name> bme280_publisher
 
 5. To launch with custom parameters, create a ROS2 launch file (Python-style) as follows:
 
-Example Launch File (bme280_launch.py):
+Example Launch File (Python-style):
 -------------------------------------------------
 from launch import LaunchDescription
 from launch_ros.actions import Node
