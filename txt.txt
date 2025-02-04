@@ -1,3 +1,17 @@
+Перед началом:
+cd /opt/ros/iron
+source setup.bash ; source install/local_setup.bash
+
+Глянуть список тем - ros2 topic list
+Выводить все сообщения темы - ros2 topic echo /imu/bearing
+
+Отправка сообщения
+ros2 topic pub -1 /vedrus/motor/command vedrus_interfaces/MotorCommand "{header: {frame_id: 'left'}, speed: 0}"
+
+
+gpio readall
+
+
 xiaoxiang BMS, прога xiaoxiang
 
 cd /opt/ros/iron
@@ -7,6 +21,7 @@ ros2 launch launch/vedrus_launch.xml
 #ros2 run vedrus ardu
 
 pip3 install getch # keyboard controller
+pip3 install smbus2 bme280
 apt-get install -y python3-serial
 
 
