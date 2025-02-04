@@ -31,10 +31,7 @@
 
 // https://github.com/br3ttb/Arduino-PID-Library
 #include <PID_v1.h>
-#include <Wire.h>
 #include <HardwareTimer.h>
-
-#define SLAVE_ADDRESS 0x08  // STM32 I2C address
 
 // Configuration
 const bool IS_LEFT_SIDE = true;  // Set to false for right side
@@ -83,24 +80,7 @@ void handleEncoderOverflow() {
   }
 }
 
-void receiveEvent(int howMany) {
-    while (Wire.available()) {
-        char received = Wire.read();  // Read data from Orange Pi
-        Serial.print("Received: ");
-        Serial.println(received);
-    }
-}
-
-void requestEvent() {
-    Wire.write("STM32 OK");  // Send data to Orange Pi
-}
-
 void setup() {
-  // Initialize STM32 as I2C slave
-  Wire.begin(SLAVE_ADDRESS);
-  Wire.onReceive(receiveEvent);
-  Wire.onRequest(requestEvent);
-  
   // Initialize serial communication
   Serial.begin(115200);
   while (!Serial) {}
