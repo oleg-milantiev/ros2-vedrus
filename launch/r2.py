@@ -66,19 +66,6 @@ def generate_launch_description():
 				{'enable_auto_exposure': True},
 			]
 		),
-		#Node(
-		#	package='influx',
-		#	executable='logger',
-		#	output='screen',
-		#	emulate_tty=True,
-		#	parameters=[
-		#		{'host': 'localhost'},
-		#		{'port': 8086},
-		#		{'user': 'r2'},
-		#		{'password': 'r2'},
-		#		{'database': 'r2'},
-		#	]
-		#),
 		Node(
 			package='vedrus',
 			executable='controller',
@@ -110,6 +97,18 @@ def generate_launch_description():
 #				{'d': 0.15},
 #			]
 #		),
+		Node(
+			package='vedrus',
+			executable='bluepill',
+			name='bluepill_left',
+			parameters=[
+				{'name': 'left'},
+				{'port': '/dev/ttyS2'},
+				{'P': 0.001},
+				{'I': 0.008},
+				{'D': 0.0}
+			]
+		),
 
 		Node(
 			package='vedrus',
@@ -152,16 +151,6 @@ def generate_launch_description():
 				{'topic_name': 'sonar_data'},
 			]
 		),
-
-#TRIG_1 = 127
-#TRIG_2 = 125
-#TRIG_3 = 124
-#TRIG_4 = 144
-
-#ECHO_1 = 122
-#ECHO_2 = 120
-#ECHO_3 = 123
-#ECHO_4 = 121
 
 		Node(
 			package='vedrus',
