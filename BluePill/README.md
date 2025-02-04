@@ -49,6 +49,7 @@ This project implements a DC motor controller using the STM32F103C8T6 (Blue Pill
 
 1. Install Arduino IDE from [arduino.cc](https://www.arduino.cc/en/software)
 2. Install STM32 board package:
+   https://github.com/stm32duino/Arduino_Core_STM32/wiki/Getting-Started
    - Open Arduino IDE
    - Go to Tools → Board → Boards Manager
    - Search for "STM32"
@@ -235,6 +236,7 @@ This project is released under the MIT License. Feel free to use, modify, and di
 
 1. Установите Arduino IDE с [arduino.cc](https://www.arduino.cc/en/software)
 2. Установите пакет плат STM32:
+   https://github.com/stm32duino/Arduino_Core_STM32/wiki/Getting-Started
    - Откройте Arduino IDE
    - Перейдите в Инструменты → Плата → Менеджер плат
    - Найдите "STM32"
