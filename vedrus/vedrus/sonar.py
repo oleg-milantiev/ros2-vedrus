@@ -6,31 +6,20 @@ the readings to a ROS2 topic. The GPIO pins and topic name are configurable thro
 node parameters.
 
 # Installation:
-To use this script, ensure you have the following Python packages installed:
-    - rclpy
-
-You can install these with pip:
-```bash
-pip install rclpy
-```
-
 Ensure the sysfs GPIO interface is enabled on your system. This can typically be done
 by exporting the GPIO pins through `/sys/class/gpio/`.
 
 # Usage:
 1. Save this script as `sonar_node.py`.
 2. Export the GPIO pins for trigger and echo via sysfs:
-```bash
 echo <pin_number> > /sys/class/gpio/export
 echo out > /sys/class/gpio/gpio<trig_pin>/direction
 echo in > /sys/class/gpio/gpio<echo_pin>/direction
-```
 3. Create a launch file (example below).
 4. Run the launch file with `ros2 launch`.
 5. Alternative use ros2 run your_package hcsr04 --ros-args -p pin_numbers:="[127, 125, 124, 144, 122, 120, 123, 121]"
 
 # ROS2 Launch File Example (Python Style):
-```python
 from launch import LaunchDescription
 from launch_ros.actions import Node
 
@@ -41,17 +30,15 @@ def generate_launch_description():
             executable='sonar_node',
             name='sonar_node',
             parameters=[
+                {'names': ['sensor1', 'sensor2', 'sensor3', 'sensor4']},  # Names for each sensor
                 {'pin_numbers': [127, 125, 124, 144, 122, 120, 123, 121]},  # Example GPIO pins
                 {'topic_name': 'sonar_data'},
             ]
         ),
     ])
-```
 
 # ROS2 Topic Subscription Example:
-```bash
 ros2 topic echo /sonar_data
-```
 """
 
 import rclpy
@@ -65,16 +52,17 @@ class SonarNode(Node):
         super().__init__('sonar_node')
 
         # Declare and get parameters
-        self.declare_parameter('pin_numbers', [127, 125, 124, 144, 122, 120, 123, 121])
+        self.declare_parameter('pins_trig', [127, 125, 124, 144])
+        self.declare_parameter('pins_echo', [122, 120, 123, 121])
         self.declare_parameter('topic_name', 'sonar_data')
+        self.declare_parameter('names', ['sensor1', 'sensor2', 'sensor3', 'sensor4'])
 
-        self.pin_numbers = self.get_parameter('pin_numbers').get_parameter_value().integer_array_value
+        self.trig_pins = self.get_parameter('pins_trig').get_parameter_value().integer_array_value
+        self.echo_pins = self.get_parameter('pins_echo').get_parameter_value().integer_array_value
         self.topic_name = self.get_parameter('topic_name').get_parameter_value().string_value
+        self.names = self.get_parameter('names').get_parameter_value().string_array_value
 
-        self.trig_pins = self.pin_numbers[:len(self.pin_numbers)//2]
-        self.echo_pins = self.pin_numbers[len(self.pin_numbers)//2:]
-
-        # Export GPIO pins and configure direction
+        # Export GPIO pins and configure direction for each sensor
         for trig, echo in zip(self.trig_pins, self.echo_pins):
             self._export_pin(trig, "out")
             self._export_pin(echo, "in")
@@ -132,9 +120,8 @@ class SonarNode(Node):
                 # Publish the Range message
                 range_msg = Range()
                 range_msg.header.stamp = self.get_clock().now().to_msg()
-                range_msg.header.frame_id = f'sonar_{i}'
+                range_msg.header.frame_id = self.names[i]
                 range_msg.radiation_type = Range.ULTRASOUND
-                range_msg.field_of_view = 0.05  # Example FOV in radians
                 range_msg.min_range = 0.02  # Minimum measurable range in meters
                 range_msg.max_range = 4.0  # Maximum measurable range in meters
                 range_msg.range = distance / 100.0  # Convert cm to meters
