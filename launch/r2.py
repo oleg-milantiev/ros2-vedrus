@@ -2,52 +2,62 @@ from launch import LaunchDescription
 from launch_ros.actions import Node
 import subprocess
 
-def generate_launch_description():
+SEEK_TEMPLATES = [
+	"USB Camera: USB Camera (usb-xhci-hcd.4.auto-1.3):",
+	"USB Camera: USB Camera (usb-xhci-hcd.4.auto-1.4.1):",
+	"USB Camera: USB Camera (usb-xhci-hcd.4.auto-1.4.2):"
+]
+
+def get_video_devices():
+	"""Get the output of v4l2-ctl --list-devices and parse it."""
 	output = subprocess.check_output(['v4l2-ctl', '--list-devices']).decode('utf-8')
-	found = False
-	usbCamDevice = ''
+	lines = output.splitlines()
+	camera_devices = {}
 
-	for line in output.split("\n"):
-		if found:
-			usbCamDevice = line.strip()
-			break
-		else:
-			if line.startswith('USB Camera: USB Camera (usb-xhci-hcd.4.auto-1.4.2):'):
-				found = True
+	current_camera = None
+	for line in lines:
+		line = line.strip()
+		if line in SEEK_TEMPLATES:
+			current_camera = line
+			camera_devices[current_camera] = []
+		elif current_camera and line.startswith('/dev/video'):
+			camera_devices[current_camera].append(line)
 
-	if not found:
-		print('USB 2.0 Camera is not found');
+	return camera_devices
+
+def check_yuyv_support(video_device):
+	"""Check if a video device supports YUYV format."""
+	try:
+		output = subprocess.check_output(['v4l2-ctl', '-d', video_device, '--list-formats-ext']).decode('utf-8')
+		return "'YUYV' (YUYV 4:2:2)" in output
+	except subprocess.CalledProcessError:
+		return False
+
+def find_yuyv_cameras():
+	"""Find cameras that support YUYV format."""
+	camera_devices = get_video_devices()
+	yuyv_devices = {}
+
+	for camera, devices in camera_devices.items():
+		for video_device in devices:
+			if check_yuyv_support(video_device):
+				yuyv_devices[camera] = video_device
+				break  # Берём первый найденный с YUYV
+
+	return yuyv_devices
+
+
+def generate_launch_description():
+	yuyv_cameras = find_yuyv_cameras()
+#	print(yuyv_cameras)
+#	for camera, device in yuyv_cameras.items():
+#		print(f"{camera} -> {device}")
+
+	if len(yuyv_cameras) < 3:
+		print(f"Found USB 2.0 Cameras: {len(yuyv_cameras)}");
 		return
 
 	return LaunchDescription([
-		Node(
-			package='yolov8_rknn',
-			executable='solver',
-			output='log',
-			emulate_tty=True,
-			parameters=[
-#				{'model': '/opt/ros/iron/family.rknn'},
-#				{'classes': ("alex", "bars", "dad", "fish", "ivan", "marta", "max", "mom", "oleg", "poly", "turtle", "yury")},
-				{'model': '/opt/ros/iron/yolov8n-1.5.2.rknn'},
-				{'classes': ("person","bicycle","car","motorbike","airplane","bus","train","truck","boat","traffic light","fire hydrant","stop sign","parking meter","bench","bird","cat","dog","horse","sheep","cow","elephant","bear","zebra","giraffe","backpack","umbrella","handbag","tie","suitcase","frisbee","skis","snowboard","sports ball","kite","baseball bat","baseball glove","skateboard","surfboard","tennis racket","bottle","wine glass","cup","fork","knife","spoon","bowl","banana","apple","sandwich","orange","broccoli","carrot","hot dog","pizza","donut","cake","chair","sofa","pottedplant","bed","diningtable","toilet","tvmonitor","laptop","mouse","remote","keyboard","cell phone","microwave","oven","toaster","sink","refrigerator","book","clock","vase","scissors","teddy bear","hair drier","toothbrush")},
-				{'camera_ids': ('back', 'front')}, # как звать камеры. Этот id уйдёт в header.frame_id
-				{'camera_rates': (5, 5)}, # обрабатывать каждый пятый кадр с первой и каждый шестой кадр со второй камеры (то есть раз в секунду для fps 5 и 6 соответственно)
-#				{'save_image_rates': (5, 5)}, # сохранять изображение раз в N обработок (в моём примере раз в пять секунд)
-				{'camera_raw_topics': ('/image_raw', '/color/image_raw')}, # откуда читать картинки
-				{'inference_topic': '/yolov8/inference'}, # куда кидать солвы
-			]
-		),
-		Node(
-			package='usb_cam',
-			executable='usb_cam_node_exe',
-			output='log',
-			emulate_tty=True,
-			parameters=[
-				{'video_device': usbCamDevice},
-				{'image_width': 640},
-				{'framerate': 5.0}
-			]
-		),
 		Node(
 			package='realsense2_camera',
 			executable='realsense2_camera_node',
@@ -67,36 +77,80 @@ def generate_launch_description():
 			]
 		),
 		Node(
+			package='usb_cam',
+			executable='usb_cam_node_exe',
+			name='rear',
+			namespace='vedrus/camera/rear',
+			output='log',
+			emulate_tty=True,
+			parameters=[
+				{'video_device': yuyv_cameras['USB Camera: USB Camera (usb-xhci-hcd.4.auto-1.3):']},
+				{'image_width': 640},
+				{'framerate': 5.0},
+				{'publish_compressed': False}
+			]
+		),
+		Node(
+			package='usb_cam',
+			executable='usb_cam_node_exe',
+			output='log',
+			name='right',
+			namespace='vedrus/camera/right',
+			emulate_tty=True,
+			parameters=[
+				{'video_device': yuyv_cameras['USB Camera: USB Camera (usb-xhci-hcd.4.auto-1.4.1):']},
+				{'image_width': 640},
+				{'framerate': 5.0},
+				{'publish_compressed': False}
+			]
+		),
+		Node(
+			package='usb_cam',
+			executable='usb_cam_node_exe',
+			output='log',
+			name='left',
+			namespace='vedrus/camera/left',
+			emulate_tty=True,
+			parameters=[
+				{'video_device': yuyv_cameras['USB Camera: USB Camera (usb-xhci-hcd.4.auto-1.4.2):']},
+				{'image_width': 640},
+				{'framerate': 5.0},
+				{'publish_compressed': False}
+			]
+		),
+
+	])
+
+
+
+
+
+
+'''
+		Node(
+			package='yolov8_rknn',
+			executable='solver',
+			output='log',
+			emulate_tty=True,
+			parameters=[
+#				{'model': '/opt/ros/iron/family.rknn'},
+#				{'classes': ("alex", "bars", "dad", "fish", "ivan", "marta", "max", "mom", "oleg", "poly", "turtle", "yury")},
+				{'model': '/opt/ros/iron/yolov8n-1.5.2.rknn'},
+				{'classes': ("person","bicycle","car","motorbike","airplane","bus","train","truck","boat","traffic light","fire hydrant","stop sign","parking meter","bench","bird","cat","dog","horse","sheep","cow","elephant","bear","zebra","giraffe","backpack","umbrella","handbag","tie","suitcase","frisbee","skis","snowboard","sports ball","kite","baseball bat","baseball glove","skateboard","surfboard","tennis racket","bottle","wine glass","cup","fork","knife","spoon","bowl","banana","apple","sandwich","orange","broccoli","carrot","hot dog","pizza","donut","cake","chair","sofa","pottedplant","bed","diningtable","toilet","tvmonitor","laptop","mouse","remote","keyboard","cell phone","microwave","oven","toaster","sink","refrigerator","book","clock","vase","scissors","teddy bear","hair drier","toothbrush")},
+				{'camera_ids': ('back', 'front')}, # как звать камеры. Этот id уйдёт в header.frame_id
+				{'camera_rates': (5, 5)}, # обрабатывать каждый пятый кадр с первой и каждый шестой кадр со второй камеры (то есть раз в секунду для fps 5 и 6 соответственно)
+#				{'save_image_rates': (5, 5)}, # сохранять изображение раз в N обработок (в моём примере раз в пять секунд)
+				{'camera_raw_topics': ('/image_raw', '/color/image_raw')}, # откуда читать картинки
+				{'inference_topic': '/yolov8/inference'}, # куда кидать солвы
+			]
+		),
+		Node(
 			package='vedrus',
 			executable='controller',
 			output='screen',
 			emulate_tty=True,
 		),
 
-#		Node(
-#			package='vedrus',
-#			executable='ardu',
-#			output='screen',
-#			emulate_tty=True,
-#			parameters=[
-#				{'device': '/dev/ttyUSB2'},
-#				{'p': 4.5},
-#				{'i': 0.15},
-#				{'d': 0.15},
-#			]
-#		),
-#		Node(
-#			package='vedrus',
-#			executable='ardu',
-#			output='screen',
-#			emulate_tty=True,
-#			parameters=[
-#				{'device': '/dev/ttyUSB1'},
-#				{'p': 4.5},
-#				{'i': 0.15},
-#				{'d': 0.15},
-#			]
-#		),
 		Node(
 			package='vedrus',
 			executable='bluepill',
@@ -164,4 +218,4 @@ def generate_launch_description():
 			output='screen',
 			emulate_tty=True,
 		),
-	])
+'''
