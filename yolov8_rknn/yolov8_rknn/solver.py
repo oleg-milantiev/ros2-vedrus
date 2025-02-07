@@ -20,9 +20,8 @@ TODO:
 - IMG_PUBLISH_TOPIC в необязательный параметр
 '''
 
-#IMG_PUBLISH_TOPIC = '/yolov8/img_out'
-
-IMG_SAVE_PATH = '/opt/ros/iron/log/'
+IMG_PUBLISH_TOPIC = '/yolov8/img_out'
+#IMG_SAVE_PATH = '/opt/ros/iron/log/'
 
 
 class YOLOv8_solver(Node):
@@ -40,7 +39,7 @@ class YOLOv8_solver(Node):
 				('save_image_rates', []),
 				('camera_raw_topics', rclpy.Parameter.Type.STRING_ARRAY),
 				('inference_topic', rclpy.Parameter.Type.STRING),
-				('obj_threshold', 0.35),
+				('obj_threshold', 0.55),
 				('nms_threshold', 0.65),
 			]
 		)
