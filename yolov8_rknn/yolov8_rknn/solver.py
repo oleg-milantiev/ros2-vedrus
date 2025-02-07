@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
-import rclpy
-from rclpy.node import Node
+import rclpy # type: ignore
+from rclpy.node import Node # type: ignore
 from datetime import datetime
-from cv_bridge import CvBridge
-from sensor_msgs.msg import Image
+from cv_bridge import CvBridge # type: ignore
+from sensor_msgs.msg import Image # type: ignore
 import numpy as np
 
 from rknnlite.api import RKNNLite
@@ -21,7 +21,6 @@ TODO:
 '''
 
 IMG_PUBLISH_TOPIC = '/yolov8/img_out'
-#IMG_SAVE_PATH = '/opt/ros/iron/log/'
 
 
 class YOLOv8_solver(Node):
@@ -101,14 +100,6 @@ class YOLOv8_solver(Node):
 			y_offset = (640 - img.shape[0]) // 2
 			frame[y_offset:y_offset+img.shape[0], x_offset:x_offset+img.shape[1]] = img
 			img = frame
-
-		if len(self.saveRates) > 0:
-			self.saveRates[camera] -= 1
-
-			if self.saveRates[camera] == 0:
-				cv2.imwrite(IMG_SAVE_PATH + self.cameras[camera] +'-'+ datetime.fromtimestamp(self.get_clock().now().to_msg().sec).strftime('%Y%m%d-%H%M%S') +'.jpg', img)
-
-				self.saveRates[camera] = self.saveRatesInit[camera]
 
 		results = self.rknn.inference(inputs=[img])
 
