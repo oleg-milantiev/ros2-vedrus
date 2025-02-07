@@ -1,11 +1,18 @@
+"""
+This is a ROS2 launch file designed to initialize and configure three USB cameras along with a Realsense camera for an autonomous robot system. 
+The script begins by detecting all available video devices using the command 'v4l2-ctl --list-devices', filtering them based on specific templates, 
+and checking whether each device supports the YUYV format. It then proceeds to configure and launch ROS2 nodes that publish images from these detected cameras. 
+Additionally, the script includes other ROS2 nodes for controlling various aspects of the robot such as its behavior, sensors like IMU (Inertial Measurement Unit), pressure sensors, etc.
+"""
+
 from launch import LaunchDescription
 from launch_ros.actions import Node
 import subprocess
 
 SEEK_TEMPLATES = [
-	"USB Camera: USB Camera (usb-xhci-hcd.4.auto-1.3):",
-	"USB Camera: USB Camera (usb-xhci-hcd.4.auto-1.4.1):",
-	"USB Camera: USB Camera (usb-xhci-hcd.4.auto-1.4.2):"
+	"USB Camera: USB Camera (usb-xhci-hcd.4.auto-1.3):", # rear
+	"USB Camera: USB Camera (usb-xhci-hcd.4.auto-1.4.1):", # right
+	"USB Camera: USB Camera (usb-xhci-hcd.4.auto-1.4.2):" # left
 ]
 
 def get_video_devices():
@@ -42,16 +49,13 @@ def find_yuyv_cameras():
 		for video_device in devices:
 			if check_yuyv_support(video_device):
 				yuyv_devices[camera] = video_device
-				break  # Берём первый найденный с YUYV
+				break
 
 	return yuyv_devices
 
 
 def generate_launch_description():
 	yuyv_cameras = find_yuyv_cameras()
-#	print(yuyv_cameras)
-#	for camera, device in yuyv_cameras.items():
-#		print(f"{camera} -> {device}")
 
 	if len(yuyv_cameras) < 3:
 		print(f"Found USB 2.0 Cameras: {len(yuyv_cameras)}");
@@ -63,6 +67,8 @@ def generate_launch_description():
 			executable='realsense2_camera_node',
 			output='log',
 			emulate_tty=True,
+			name='front',
+			namespace='vedrus/camera',
 			parameters=[
 				{'enable_depth': True},
 				{'enable_color': True},
@@ -118,15 +124,6 @@ def generate_launch_description():
 				{'publish_compressed': False}
 			]
 		),
-
-	])
-
-
-
-
-
-
-'''
 		Node(
 			package='yolov8_rknn',
 			executable='solver',
@@ -137,13 +134,22 @@ def generate_launch_description():
 #				{'classes': ("alex", "bars", "dad", "fish", "ivan", "marta", "max", "mom", "oleg", "poly", "turtle", "yury")},
 				{'model': '/opt/ros/iron/yolov8n-1.5.2.rknn'},
 				{'classes': ("person","bicycle","car","motorbike","airplane","bus","train","truck","boat","traffic light","fire hydrant","stop sign","parking meter","bench","bird","cat","dog","horse","sheep","cow","elephant","bear","zebra","giraffe","backpack","umbrella","handbag","tie","suitcase","frisbee","skis","snowboard","sports ball","kite","baseball bat","baseball glove","skateboard","surfboard","tennis racket","bottle","wine glass","cup","fork","knife","spoon","bowl","banana","apple","sandwich","orange","broccoli","carrot","hot dog","pizza","donut","cake","chair","sofa","pottedplant","bed","diningtable","toilet","tvmonitor","laptop","mouse","remote","keyboard","cell phone","microwave","oven","toaster","sink","refrigerator","book","clock","vase","scissors","teddy bear","hair drier","toothbrush")},
-				{'camera_ids': ('back', 'front')}, # как звать камеры. Этот id уйдёт в header.frame_id
-				{'camera_rates': (5, 5)}, # обрабатывать каждый пятый кадр с первой и каждый шестой кадр со второй камеры (то есть раз в секунду для fps 5 и 6 соответственно)
+				{'camera_ids': ('front', 'rear', 'left', 'right')}, # как звать камеры. Этот id уйдёт в header.frame_id
+				{'camera_rates': (5, 1, 1, 1)}, # обрабатывать каждый пятый кадр с первой и каждый кадр с остальных (5 раз в секунду с каждой)
 #				{'save_image_rates': (5, 5)}, # сохранять изображение раз в N обработок (в моём примере раз в пять секунд)
-				{'camera_raw_topics': ('/image_raw', '/color/image_raw')}, # откуда читать картинки
+				{'camera_raw_topics': ('/vedrus/camera/front/color/image_raw', '/vedrus/camera/rear/image_raw', '/vedrus/camera/left/image_raw', '/vedrus/camera/right/image_raw')}, # откуда читать картинки
 				{'inference_topic': '/yolov8/inference'}, # куда кидать солвы
 			]
 		),
+
+	])
+
+
+
+
+
+
+'''
 		Node(
 			package='vedrus',
 			executable='controller',
