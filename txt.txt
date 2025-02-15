@@ -131,6 +131,7 @@ A4 TECH USB2.0 PC Camera J: A4  (usb-xhci-hcd.4.auto-1.4.4):
         /dev/media3
 
 v4l2-ctl -d /dev/video9 --all
+v4l2-ctl -d /dev/video9 --list-formats-ext
 
 
 https://github.com/IntelRealSense/realsense-ros

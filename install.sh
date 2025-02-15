@@ -39,4 +39,5 @@ ln -s `pwd`/vedrus /opt/ros/iron/src/vedrus
 ln -s `pwd`/vedrus_interfaces /opt/ros/iron/src/vedrus_interfaces
 ln -s `pwd`/yolov8_rknn /opt/ros/iron/src/yolov8_rknn
 ln -s `pwd`/yolov8_interfaces /opt/ros/iron/src/yolov8_interfaces
+ln -s `pwd`/ros2_mpu9250_driver /opt/ros/iron/src/ros2_mpu9250_driver
 ln -s `pwd`/build.sh /opt/ros/iron/build.sh
