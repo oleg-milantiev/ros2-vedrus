@@ -22,6 +22,7 @@ import threading
 
 # Configuration
 SERIAL_PORT = '/dev/ttyUSB0'
+SERIAL_PORT = '/dev/ttyS2' # 2 - left, 3 - right
 BAUD_RATE = 115200
 
 # Add PID parameter tracking
