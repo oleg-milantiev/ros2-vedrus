@@ -1,13 +1,20 @@
-import rclpy # type: ignore
+import time
 from std_msgs.msg import Float32 # type: ignore
 from sensor_msgs.msg import Imu # type: ignore
-from vedrus_interfaces.msg import MotorCommand, MotorPID, Safety, KeepAlive, Status, StatusItem
+from vedrus_interfaces.msg import MotorCommand, Safety, KeepAlive, Status, StatusItem
 
 class ModeParent():
     node = None
     
+    # время последнего safety::alarm
+    lastAlarmTime = None
+
+    # выход из режима в другой режим
+    out = None
+
     def __init__(self, node):
         self.node = node
+        self.lastAlarmTime = time.time()
         pass
 
     def _statusInit(self):

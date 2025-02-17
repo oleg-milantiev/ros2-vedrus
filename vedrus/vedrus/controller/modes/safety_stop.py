@@ -5,14 +5,6 @@ DEBUG = True
 
 # Режим "Останов перед препятствием"
 class ModeSafetyStop(ModeParent):
-	# время последнего safety::alarm
-	lastAlarmTime = None
-
-	# выход из режима в другой режим
-	out = None
-
-	def __init__(self):
-		self.lastAlarmTime = time.time()
 
 	# поймал safety.warning
 	def warning(self, msg):

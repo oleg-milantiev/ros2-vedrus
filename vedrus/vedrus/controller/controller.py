@@ -2,7 +2,7 @@ import rclpy  # type: ignore
 from rclpy.node import Node  # type: ignore
 from std_msgs.msg import Float32  # type: ignore
 from sensor_msgs.msg import Imu  # type: ignore
-from vedrus_interfaces.msg import MotorCommand, MotorPID, Safety, KeepAlive, Status, StatusItem
+from vedrus_interfaces.msg import MotorCommand, Safety, KeepAlive, Status, StatusItem
 import time
 
 from .modes.parent import ModeParent
@@ -54,7 +54,7 @@ class VedrusControlerNode(Node):
 		super().__init__('vedrus_control_node')
 
 		self.publisherStatus = self.create_publisher(Status, '/vedrus/status', 10)
-		self.publisherMotor = self.create_publisher(MotorPID, '/vedrus/motor/command', 10)
+		self.publisherMotor = self.create_publisher(MotorCommand, '/vedrus/motor/command', 10)
 
 		# magnetic bearing
 		self.create_subscription(Float32, '/imu/bearing', self.bearing_callback, 10)
