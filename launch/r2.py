@@ -272,11 +272,6 @@ def generate_launch_description():
             emulate_tty=True,
         ),
 
-    ])
-
-
-
-'''
         Node(
             package='vedrus',
             executable='controller',
@@ -289,6 +284,12 @@ def generate_launch_description():
             output='screen',
             emulate_tty=True,
         ),
+
+    ])
+
+
+
+'''
         Node(
             package='vedrus',
             executable='server',
