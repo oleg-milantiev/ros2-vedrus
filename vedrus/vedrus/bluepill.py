@@ -15,6 +15,7 @@ via UART. The node communicates with the motor controller by sending and receivi
 - `P` (float, default: -1): Proportional gain for the PID controller (negative value means not set).
 - `I` (float, default: -1): Integral gain for the PID controller.
 - `D` (float, default: -1): Derivative gain for the PID controller.
+- `reverse` (boolean, default: False): Indicates whether to reverse the motor movement direction.
 
 ### Subscribed Topics:
 - `/vedrus/motor/command` (vedrus_interface/MotorCommand):
@@ -28,7 +29,7 @@ via UART. The node communicates with the motor controller by sending and receivi
 
 ### Usage:
 #### Run the node:
-ros2 run your_package_name bluepill --ros-args -p P:=0.006 -p I:=0.002
+ros2 run your_package_name bluepill --ros-args -p P:=0.006 -p I:=0.002 -p reverse:=True
 
 Example Launch File:
 from launch import LaunchDescription
@@ -45,16 +46,17 @@ def generate_launch_description():
                 {'port': '/dev/ttyS2'},
                 {'P': 0.01},
                 {'I': 0.02},
-                {'D': 0.005}
+                {'D': 0.005},
+                {'reverse': True}
             ]
         )
     ])
 '''
 
-import rclpy
-from rclpy.node import Node
+import rclpy # type: ignore
+from rclpy.node import Node # type: ignore
 import serial
-from std_msgs.msg import Header
+from std_msgs.msg import Header # type: ignore
 from vedrus_interfaces.msg import MotorCommand, MotorStatus
 from threading import Thread, Lock
 
@@ -68,12 +70,14 @@ class BluePillNode(Node):
         self.declare_parameter('P', -1.)
         self.declare_parameter('I', -1.)
         self.declare_parameter('D', -1.)
+        self.declare_parameter('reverse', False)
 
         self.motor_name = self.get_parameter('name').get_parameter_value().string_value
         self.port = self.get_parameter('port').get_parameter_value().string_value
         self.P = self.get_parameter('P').get_parameter_value().double_value
         self.I = self.get_parameter('I').get_parameter_value().double_value
         self.D = self.get_parameter('D').get_parameter_value().double_value
+        self.reverse = self.get_parameter('reverse').get_parameter_value().bool_value
 
         self.serial_lock = Lock()
 
@@ -117,6 +121,8 @@ class BluePillNode(Node):
 
     def command_callback(self, msg: MotorCommand):
         if msg.header.frame_id == self.motor_name:
+            if self.reverse:
+                msg.speed = -msg.speed
             speed_command = f"M{msg.speed}"
             self.send_command(speed_command)
 
@@ -159,7 +165,6 @@ class BluePillNode(Node):
         self.read_thread.join()
         self.serial.close()
         super().destroy_node()
-
 
 def main(args=None):
     rclpy.init(args=args)

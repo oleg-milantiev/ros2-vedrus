@@ -5,12 +5,26 @@
 	<meta http-equiv="X-UA-Compatible" content="IE=edge">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>Vedrus bot</title>
+	
+	<style>
+		table {
+			border-collapse: collapse;
+		}
+		td, th {
+			border: 1px solid black;
+			padding: 2px;
+		}
+	</style>
 </head>
 <body>
 	<table style="width: 100%">
 		<tr>
 			<td id="controller-mode" style="width: 50%"></td>
 			<td id="controller-action" style="width: 50%"></td>
+		</tr>
+		<tr>
+			<td id="controller-bearing" style="width: 50%"></td>
+			<td id="controller-azimuth" style="width: 50%"></td>
 		</tr>
 		<tr>
 			<td id="controller-rotate" style="width: 50%"></td>
@@ -31,10 +45,47 @@
 		</tr>
 	</table>
 
-	<!-- div>
-		<button class="set">Set</button>
-		<input type="text" id="value">
-	</div -->
+	<table style="width: 100%; border: 1px solid blue;">
+		<tr>
+			<td colspan="4"><b>Ardu</b></td>
+		</tr>
+		<tr>
+			<td style="width: 20%">MaxPower</td>
+			<td style="width: 10%"><button type="button" class="minus">&nbsp;-&nbsp;</button></td>
+			<td style="width: 60%" class="content" id="ardu-max-power"></td>
+			<td style="width: 10%"><button type="button" class="plus">&nbsp;+&nbsp;</button></td>
+		</tr>
+		<tr>
+			<td>P</td>
+			<td><button type="button" class="minus">&nbsp;-&nbsp;</button></td>
+			<td id="ardu-p" class="content"></td>
+			<td><button type="button" class="plus">&nbsp;+&nbsp;</button></td>
+		</tr>
+		<tr>
+			<td>I</td>
+			<td><button type="button" class="minus">&nbsp;-&nbsp;</button></td>
+			<td id="ardu-i" class="content"></td>
+			<td><button type="button" class="plus">&nbsp;+&nbsp;</button></td>
+		</tr>
+		<tr>
+			<td>D</td>
+			<td><button type="button" class="minus">&nbsp;-&nbsp;</button></td>
+			<td id="ardu-d" class="content"></td>
+			<td><button type="button" class="plus">&nbsp;+&nbsp;</button></td>
+		</tr>
+
+		<tr>
+			<td colspan="4"><b>Controller</b></td>
+		</tr>
+		<tr>
+			<td>RotateMaxSpeed</td>
+			<td><button type="button" class="minus">&nbsp;-&nbsp;</button></td>
+			<td id="controller-rotate-max-speed" class="content"></td>
+			<td><button type="button" class="plus">&nbsp;+&nbsp;</button></td>
+		</tr>
+	</table>
+
+	<button class="set" style="width:100%">&nbsp;SET&nbsp;</button>
 
 	<script>
 		document.addEventListener('DOMContentLoaded', function() {
@@ -76,6 +127,19 @@
 			}
 
 			function drawSafety(data) {
+				const ardu_p = document.getElementById('ardu-p');
+				if (ardu_p.innerHTML == '') {
+					ardu_p.innerHTML = data.ardu.p;
+				}
+				const ardu_i = document.getElementById('ardu-i');
+				if (ardu_i.innerHTML == '') {
+					ardu_i.innerHTML = data.ardu.i;
+				}
+				const ardu_d = document.getElementById('ardu-d');
+				if (ardu_d.innerHTML == '') {
+					ardu_d.innerHTML = data.ardu.d;
+				}
+
 				const canvas = document.getElementById('safety');
 				const ctx = canvas.getContext('2d');
 				ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -113,6 +177,8 @@
 					document.getElementById('controller-action').textContent = data.controller.action;
 					document.getElementById('controller-rotate').textContent = data.controller.rotateSpeed;
 					document.getElementById('controller-move').textContent = data.controller.move;
+					document.getElementById('controller-bearing').textContent = data.controller.bearing;
+					document.getElementById('controller-azimuth').textContent = data.controller.rotateAzimuth;
 				}
 
 				if (data.motor.left.pid != null) {
@@ -126,7 +192,7 @@
 					document.getElementById('left-move').textContent = data.motor.left.move.power1.toFixed(2);
 
 					ctx.fillStyle = 'red';
-					ctx.fillRect(5, centerY, 15, - data.motor.left.move.power1 / 50. * canvas.height / 2.);
+					ctx.fillRect(5, centerY, 15, - data.motor.left.move.power1 / 50. * canvas.height / 2. * (data.motor.left.move.forward ? 1 : -1) );
 				}
 
 				if (data.motor.right.pid != null) {
@@ -140,7 +206,7 @@
 					document.getElementById('right-move').textContent = data.motor.right.move.power1.toFixed(2);
 
 					ctx.fillStyle = 'red';
-					ctx.fillRect(canvas.height - 20, centerY, 15, -data.motor.right.move.power1 / 50. * canvas.height / 2.);
+					ctx.fillRect(canvas.height - 20, centerY, 15, -data.motor.right.move.power1 / 50. * canvas.height / 2. * (data.motor.right.move.forward ? 1 : -1));
 				}
 
 				for (var i in data.safety) {
@@ -175,15 +241,34 @@
 			// Вызов функции getStatus() каждые 200 миллисекунд (5 раз в секунду)
 			setInterval(getStatus, 200);
 
+			document.querySelectorAll('.minus').forEach(button => {
+				button.addEventListener('click', function() {
+					var content = this.parentNode.nextElementSibling;
+
+					content.textContent = (parseFloat(content.textContent) - 0.05).toFixed(2);
+				});
+			});
+
+			document.querySelectorAll('.plus').forEach(button => {
+				button.addEventListener('click', function() {
+					var content = this.parentNode.previousElementSibling;
+
+					content.textContent = (parseFloat(content.textContent) + 0.05).toFixed(2);
+				});
+			});
+
 			// Обработчик нажатия на кнопку с классом "set"
 			document.querySelector('.set').addEventListener('click', function() {
-				const value = document.getElementById('value').value;
 				fetch('/control', {
 					method: 'POST',
 					headers: {
 						'Content-Type': 'application/json'
 					},
-					body: JSON.stringify({ value: value })
+					body: JSON.stringify({
+						ardu_p: document.getElementById('ardu-p').innerHTML,
+						ardu_i: document.getElementById('ardu-i').innerHTML,
+						ardu_d: document.getElementById('ardu-d').innerHTML,
+					})
 				})
 				.then(response => response.text())
 				.then(data => console.log(data))
