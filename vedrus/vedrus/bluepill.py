@@ -20,7 +20,7 @@ via UART. The node communicates with the motor controller by sending and receivi
 ### Subscribed Topics:
 - `/vedrus/motor/command` (vedrus_interface/MotorCommand):
   - Accepts a command to control the motor speed.
-  - Command structure: `std_msgs/Header header, int16 speed`.
+  - Command structure: `std_msgs/Header header, int16 speed, bool crash`.
 
 ### Published Topics:
 - `/vedrus/motor/status` (vedrus_interface/MotorStatus):
@@ -64,6 +64,9 @@ class BluePillNode(Node):
     def __init__(self):
         super().__init__('bluepill')
 
+        self.crash = False
+        self.serial_lock = Lock()
+
         # Declare and read parameters
         self.declare_parameter('name', 'left')
         self.declare_parameter('port', '/dev/ttyS2')
@@ -78,8 +81,6 @@ class BluePillNode(Node):
         self.I = self.get_parameter('I').get_parameter_value().double_value
         self.D = self.get_parameter('D').get_parameter_value().double_value
         self.reverse = self.get_parameter('reverse').get_parameter_value().bool_value
-
-        self.serial_lock = Lock()
 
         # Open UART connection
         try:
@@ -120,7 +121,18 @@ class BluePillNode(Node):
             self.get_logger().error(f"Failed to send command: {e}")
 
     def command_callback(self, msg: MotorCommand):
+        if self.crash:
+            self.get_logger().warn("Crash state is active. Ignoring further commands.")
+            return
+
         if msg.header.frame_id == self.motor_name:
+            if msg.crash:
+                self.crash = True
+                self.send_command("M0")
+                self.get_logger().error("Crash command received. Stopping motor and shutting down node.")
+#                self.destroy_node()
+                return
+
             if self.reverse:
                 msg.speed = -msg.speed
             speed_command = f"M{msg.speed}"
