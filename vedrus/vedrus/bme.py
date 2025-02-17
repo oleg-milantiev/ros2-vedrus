@@ -52,9 +52,9 @@ def generate_launch_description():
 ros2 launch <your_package_name> bme280_launch.py
 '''
 
-import rclpy
-from rclpy.node import Node
-from sensor_msgs.msg import Temperature, RelativeHumidity, FluidPressure
+import rclpy # type: ignore
+from rclpy.node import Node # type: ignore
+from sensor_msgs.msg import Temperature, RelativeHumidity, FluidPressure # type: ignore
 import smbus2
 import bme280
 
