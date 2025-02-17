@@ -1,10 +1,10 @@
 import csv
-import rclpy
+import rclpy # type: ignore
 import numpy as np
-from rclpy.node import Node
-from std_msgs.msg import Float32
-from sensor_msgs.msg import Imu
-from vedrus_interfaces.msg import MotorMove, MotorPID, Safety, KeepAlive, Status, StatusItem
+from rclpy.node import Node # type: ignore
+from std_msgs.msg import Float32 # type: ignore
+from sensor_msgs.msg import Imu # type: ignore
+from vedrus_interfaces.msg import MotorCommand, MotorPID, Safety, KeepAlive, Status, StatusItem
 import time
 
 DEBUG = True
@@ -120,8 +120,7 @@ class ModeRotateToPerson(ModeParent):
 		# Собираю данные RGBD для дальнейшего поиска расстояния до персоны
 		if msg.header.frame_id == 'rgbd':
 			azimuth = msg.azimuth + node.bearing
-			if azimuth > 360:
-				azimuth -= 360
+			azimuth = azimuth % 360
 
 			self.depths.append({
 				'time': second,
@@ -136,8 +135,8 @@ class ModeRotateToPerson(ModeParent):
 	def alarm(self, msg):
 		# RGBD камера на солнце шумит (доделать safety фильтрацию last / preLast)
 		# пока что игнорирую алармы от RGBD
-		if msg.header.frame_id == 'rgbd':
-			return
+		#if msg.header.frame_id == 'rgbd':
+		#	return
 
 		self.lastAlarmTime = time.time()
 		self.alarmCount += 1
@@ -348,8 +347,8 @@ class ModeForwardSlow():
 	def alarm(self, msg):
 		# RGBD камера на солнце шумит (доделать safety фильтрацию last / preLast)
 		# пока что игнорирую алармы от RGBD
-		if msg.header.frame_id == 'rgbd':
-			return
+		#if msg.header.frame_id == 'rgbd':
+		#	return
 
 		self.lastAlarmTime = time.time()
 		self.alarmCount += 1
@@ -413,8 +412,8 @@ class ModeSafetyStop(ModeParent):
 	def alarm(self, msg):
 		# RGBD камера на солнце шумит (доделать safety фильтрацию last / preLast)
 		# пока что игнорирую алармы от RGBD
-		if msg.header.frame_id == 'rgbd':
-			return
+		#if msg.header.frame_id == 'rgbd':
+		#	return
 
 		if DEBUG:
 			node.get_logger().info('ModeSafetyStop: got alarm')
@@ -453,43 +452,41 @@ class VedrusControlerNode(Node):
 	mode = None
 
 	# Управление моторами
-	publisherLeft = None
-	publisherRight = None
+	publisherMotor = None
 
 	# время последнего keepalive Safety
 	keepalive = None
 
 
-	def left(self, speed, breaking=False):
+	def left(self, speed):
 		#if DEBUG:
 		#	self.get_logger().info('VedrusControlerNode::left: set speed to '+ str(speed))
 
-		msg = MotorPID()
-
+		msg = MotorCommand()
+		msg.header.stamp = self.get_clock().now().to_msg()
+		msg.header.frame_id = 'left'
 		msg.speed = speed
-		msg.breaking = breaking
+		self.publisherMotor.publish(msg)
 
-		self.publisherLeft.publish(msg)
 		return
 
-	def right(self, speed, breaking=False):
+	def right(self, speed):
 		#if DEBUG:
 		#	self.get_logger().info('VedrusControlerNode::right: set speed to '+ str(speed))
 
-		msg = MotorPID()
-
+		msg = MotorCommand()
+		msg.header.stamp = self.get_clock().now().to_msg()
+		msg.header.frame_id = 'right'
 		msg.speed = speed
-		msg.breaking = breaking
+		self.publisherMotor.publish(msg)
 
-		self.publisherRight.publish(msg)
 		return
 
 	def __init__(self):
 		super().__init__('vedrus_control_node')
 
-		self.publisherStatus = self.create_publisher(Status, 'vedrus/status', 10)
-		self.publisherLeft = self.create_publisher(MotorPID, 'vedrus/left/pid', 10)
-		self.publisherRight = self.create_publisher(MotorPID, 'vedrus/right/pid', 10)
+		self.publisherStatus = self.create_publisher(Status, '/vedrus/status', 10)
+		self.publisherMotor = self.create_publisher(MotorPID, '/vedrus/motor/command', 10)
 
 		# magnetic bearing
 		self.create_subscription(
@@ -610,14 +607,16 @@ class VedrusControlerNode(Node):
 
 			self.get_logger().info('Got safety keepalive timeout!')
 
-			msg = MotorMove()
+			msg = MotorCommand()
+			msg.header.stamp = self.get_clock().now().to_msg()
+			msg.header.frame_id = 'left'
+			msg.speed = 0
 			msg.crash = True
 
-			publisher = self.create_publisher(MotorMove, '/vedrus/left/move', 10)
-			publisher.publish(msg)
+			self.publisherMotor.publish(msg)
 
-			publisher = self.create_publisher(MotorMove, '/vedrus/right/move', 10)
-			publisher.publish(msg)
+			msg.header.frame_id = 'right'
+			self.publisherMotor.publish(msg)
 
 
 def main(args=None):
