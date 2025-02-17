@@ -1,3 +1,14 @@
+'''
+TBD
+- ardu 1 / 2 keepalive
+
+1280x720 6,15,30
+848X480 6,15,30,60,90 <- native for d435
+640x480 6,15,30,60,90
+640x360 6,15,30,60,90
+480x270 6,15,30,60,90
+424x240 6,15,30,60,90
+'''
 import rclpy
 from rclpy.node import Node
 from vedrus_interfaces.msg import Safety, Sonar, MotorMove, KeepAlive
@@ -13,7 +24,7 @@ bridge = CvBridge()
 import numpy as np
 from scipy.ndimage import center_of_mass, label
 
-MAX_X = 160
+MAX_X = 212
 MAX_Y = 120
 
 #TBD читать из инфо камеры
@@ -22,7 +33,7 @@ CAMERA_AZIMUTH = {
 	'back': 180.,
 	}
 CAMERA_FOV = {
-	'front': 87.,
+	'front': 91.2,
 	'back': 80.,
 	}
 
@@ -125,6 +136,12 @@ class SafetyNode(Node):
 			msg.azimuth = data.azimuth
 			self.publisher_safety.publish(msg)
 
+	# Пара массивов прошлых и препрошлых глубин raw
+	depths50Last = []
+	depths50Prelast = []
+	depths100Last = []
+	depths100Prelast = []
+
 	def depth_camera_callback(self, data):
 		def rebin(a, shape):
 			sh = shape[0],a.shape[0]//shape[0],shape[1],a.shape[1]//shape[1]
@@ -161,6 +178,9 @@ class SafetyNode(Node):
 				return center_of_mass(mask, lbl[0], index)
 
 		cc = centers(np.where(((arr > 3) & (arr < 16)), 1, 0))
+
+		#self.depths50PreLast = self.depth50Last[:]
+		#self.depths50Last = cc[:]
 
 		stamp = self.get_clock().now().to_msg()
 

@@ -2,14 +2,14 @@ import csv
 import rclpy
 import numpy as np
 from rclpy.node import Node
+from std_msgs.msg import Float32
 from sensor_msgs.msg import Imu
-from simple_pid import PID
 from vedrus_interfaces.msg import MotorMove, MotorPID, Safety, KeepAlive, Status, StatusItem
 import time
 
 DEBUG = True
 CSV = True
-RGBD_FOV = 80.
+RGBD_FOV = 92.2
 
 class ModeParent():
 	def _statusInit(self):
@@ -26,18 +26,20 @@ class ModeParent():
 	def _statusPublish(self):
 		node.publisherStatus.publish(self.status)
 
+	# Углы 1 и 2 отличаются не больше gap
+	def _anglesMatch(self, angle1, angle2, gap):
+		diff = abs(angle1 - angle2)
+		return (diff <= gap or (360 - diff) <= gap)
+
 
 # Режим "Поворот к персоне" (с движением вперёд или без)
 class ModeRotateToPerson(ModeParent):
-	ROTATE_SPEED_MAX = 3.
+	ROTATE_SPEED_MAX = 5.
 
 	# Азимут последней замеченной персоны (и время)
 	azimuth = None
 	persons = []
 	lastPersonTime = None
-
-	# simple_pid.PID instance
-	pid = None
 
 	# время последнего safety::alarm
 	lastAlarmTime = None
@@ -66,8 +68,20 @@ class ModeRotateToPerson(ModeParent):
 
 		# TBD две персоны с разными азимутами (ex.: > 10°)
 		# TBD N персон с близкими азимутами (ex.: 10°)
-		if msg.header.frame_id == 'yolo:person':
-			self.azimuth = msg.azimuth
+		if msg.header.frame_id == 'yolo:person' and node.bearing is not None:
+			'''
+			# игнорирую +-5°, т.к. персона суть не точная
+			if abs(msg.azimuth) < 5:
+				return
+			'''
+
+			# в сообщении азимут по base_link
+			# переведу в магнитный
+			azimuth = msg.azimuth + node.bearing
+			if azimuth > 360:
+				azimuth -= 360
+
+			self.azimuth = azimuth
 			self.lastPersonTime = time.time()
 
 			if DEBUG:
@@ -105,17 +119,26 @@ class ModeRotateToPerson(ModeParent):
 
 		# Собираю данные RGBD для дальнейшего поиска расстояния до персоны
 		if msg.header.frame_id == 'rgbd':
+			azimuth = msg.azimuth + node.bearing
+			if azimuth > 360:
+				azimuth -= 360
+
 			self.depths.append({
 				'time': second,
-				'azimuth': msg.azimuth - 360. if msg.azimuth > 180. else msg.azimuth, # -180 ... +180
+				'azimuth': azimuth,
 				'range': msg.range,
 			})
 
-			# Удаляю не актуальные в окне 1с
-			self.depths = [item for item in self.depths if item['time'] >= (second - 1)]
+			# Удаляю не актуальные в окне 0.5с
+			self.depths = [item for item in self.depths if item['time'] >= (second - 0.5)]
 
 	# поймал safety.alarm
 	def alarm(self, msg):
+		# RGBD камера на солнце шумит (доделать safety фильтрацию last / preLast)
+		# пока что игнорирую алармы от RGBD
+		if msg.header.frame_id == 'rgbd':
+			return
+
 		self.lastAlarmTime = time.time()
 		self.alarmCount += 1
 
@@ -127,27 +150,29 @@ class ModeRotateToPerson(ModeParent):
 		if self.azimuth is None or len(self.depths) == 0:
 			return False
 
-		azimuth180 = self.azimuth - 360. if self.azimuth > 180. else self.azimuth # -180 ... +180
 		gap = 5. # +-5° допуск
 
-		azimuthDepths = [item for item in self.depths if (azimuth180 - gap) < item['azimuth'] < (azimuth180 + gap)]
-
+		azimuthDepths = [item for item in self.depths if self._anglesMatch(self.azimuth, item['azimuth'], gap)]
+		print(azimuthDepths)
 		return len(azimuthDepths) > 0
 
 	def cycle(self):
+		'''
+		TBD
+		- controller: есть моща поворота, а bearing не меняется?
+		- ardu: малая моща на моторе без движения уводит его в защиту
+		'''
 		self._statusInit()
 		self._statusAppend('mode', 'RotateToPerson')
 		self._statusAppend('forward', 'Y' if self.forward else 'N')
+		self._statusAppend('bearing', '{:.2f}'.format(node.bearing))
 
 		# вход в режим. Начало поворотов
 		if not self.started:
 			if DEBUG:
-				node.get_logger().info('ModeRotateToPerson: start to rotate/move to person')
+				node.get_logger().info('ModeRotateToPerson: start to rotate/move to person. Forward=' +('Y' if self.forward else 'N'))
 
 			self.started = True
-			self.pid = PID(3.0, 0.1, 0.05, setpoint=0.0)
-			self.pid.sample_time = 0.2
-			self.pid.output_limits = (-1.0, 1.0)
 
 		# случайная одиночная тревога за 0.5с. Игнорю
 		if self.alarmCount == 1 and time.time() - self.lastAlarmTime >= 0.5:
@@ -172,6 +197,16 @@ class ModeRotateToPerson(ModeParent):
 			self._statusPublish()
 
 			return route
+
+		# Ещё нет данных компАса
+		if node.bearing is None:
+			if DEBUG:
+				node.get_logger().info('ModeRotateToPerson: No bearing data.')
+
+			self._statusAppend('action', 'No bearing')
+			self._statusPublish()
+
+			return self
 
 		# Персона есть? А то сидим и ждём
 		if self.azimuth is None:
@@ -199,32 +234,84 @@ class ModeRotateToPerson(ModeParent):
 
 			return self
 
-		# -1 .. +1
-		rotateAzimuth = (self.azimuth - 360. if self.azimuth > 180. else self.azimuth) / 180.
-		#rotateSpeed = self.pid(rotateAzimuth)
-		rotateSpeed = rotateAzimuth
+		'''
+		# хочу повернуть и не могу уже три секунды
+		if (time.time() - self.lastBearingChanged) > 3:
+			if DEBUG:
+				node.get_logger().info('ModeRotateToPerson: No rotate 3 sec.')
 
-		#self._statusAppend('rotateAzimuth', '{:.2f}'.format(rotateAzimuth))
+			# Стоп машина! :)
+			node.left(0.)  # без тормоза
+			node.right(0.) # плавно скорость в ноль
+
+			self.azimuth = None
+
+			self._statusAppend('action', 'No rotate')
+			self._statusPublish()
+
+			return self
+		'''
+
+		# -180 .. +180
+		rotateAzimuth = self.azimuth - node.bearing
+		if rotateAzimuth <= -180:
+			rotateAzimuth += 360
+		elif rotateAzimuth > 180:
+			rotateAzimuth -= 360
+
+		# -1 .. +1
+		rotateSpeed = rotateAzimuth / 180
+
+		self._statusAppend('rotateAzimuth', '{:.2f}'.format(rotateAzimuth))
 		self._statusAppend('rotateSpeed', '{:.2f}'.format(rotateSpeed))
+
+		isInRGBDCamera = self._anglesMatch(self.azimuth, node.bearing, RGBD_FOV)
+		if DEBUG:
+			node.get_logger().info('ModeRotateToPerson: is in RGBD camera: '+('Y' if isInRGBDCamera else 'N') )
+
+		isPersonNear = self.__isPersonNearAtAzimuth()
+		if DEBUG:
+			node.get_logger().info('ModeRotateToPerson: is person near: '+('Y' if isPersonNear else 'N') )
 
 		# если задан флаг "двигаться вперёд"
 		# если азимут в FOV передней RGBD камеры
 		# если расстояние до персоны > 1м
-		if self.forward and not (RGBD_FOV/2. < self.azimuth < (360.-RGBD_FOV/2.)) and not self.__isPersonNearAtAzimuth():
+		if self.forward and isInRGBDCamera and not isPersonNear:
 			move = True
 
-			left = self.ROTATE_SPEED_MAX - (rotateSpeed * 2 * self.ROTATE_SPEED_MAX)
-			right = self.ROTATE_SPEED_MAX + (rotateSpeed * 2* self.ROTATE_SPEED_MAX)
+			right = self.ROTATE_SPEED_MAX - (rotateSpeed * 2. * self.ROTATE_SPEED_MAX)
+			left = self.ROTATE_SPEED_MAX + (rotateSpeed * 2. * self.ROTATE_SPEED_MAX)
 		else:
 			move = False
 
-			left = self.ROTATE_SPEED_MAX * rotateSpeed * 2 
-			right = -self.ROTATE_SPEED_MAX * rotateSpeed * 2
+			if -5. < rotateAzimuth < 5.:
+				if DEBUG:
+					node.get_logger().info('ModeRotateToPerson: Done rotate to person')
+
+				# Стоп машина! :)
+				node.left(0.)  # без тормоза
+				node.right(0.) # плавно скорость в ноль
+
+				self.azimuth = None
+
+				self._statusAppend('action', 'Done rotate')
+				self._statusPublish()
+
+				return self
+
+			else:
+
+				left = self.ROTATE_SPEED_MAX * rotateSpeed * 6. 
+				right = -self.ROTATE_SPEED_MAX * rotateSpeed * 6.
 
 		self._statusAppend('move', 'Y' if move else 'N')
+		if DEBUG:
+			node.get_logger().info('ModeRotateToPerson: move: '+('Y' if move else 'N'))
+			node.get_logger().info('ModeRotateToPerson: left: '+str(left))
+			node.get_logger().info('ModeRotateToPerson: right: '+str(right))
 
-		node.left(min(left, self.ROTATE_SPEED_MAX))
-		node.right(min(right, self.ROTATE_SPEED_MAX))
+		node.left(max(min(left, self.ROTATE_SPEED_MAX), -self.ROTATE_SPEED_MAX))
+		node.right(max(min(right, self.ROTATE_SPEED_MAX), -self.ROTATE_SPEED_MAX))
 
 		if CSV:
 			stamp = node.get_clock().now().to_msg()
@@ -234,8 +321,8 @@ class ModeRotateToPerson(ModeParent):
 				stampSecond, rotateAzimuth, rotateSpeed, move, left, right
 			])
 
-		if DEBUG:
-			print('{:12.2f} {:12.2f} {:12.2f}      {:b} {:12.4f} {:12.4f}'.format(stampSecond, rotateAzimuth, rotateSpeed, move, left, right))
+#		if DEBUG:
+#			print('{:12.2f} {:12.2f} {:12.2f}      {:b} {:12.4f} {:12.4f}'.format(stampSecond, rotateAzimuth, rotateSpeed, move, left, right))
 
 		self._statusPublish()
 
@@ -259,6 +346,11 @@ class ModeForwardSlow():
 
 	# поймал safety.alarm
 	def alarm(self, msg):
+		# RGBD камера на солнце шумит (доделать safety фильтрацию last / preLast)
+		# пока что игнорирую алармы от RGBD
+		if msg.header.frame_id == 'rgbd':
+			return
+
 		self.lastAlarmTime = time.time()
 		self.alarmCount += 1
 
@@ -319,6 +411,11 @@ class ModeSafetyStop(ModeParent):
 
 	# поймал safety.alarm
 	def alarm(self, msg):
+		# RGBD камера на солнце шумит (доделать safety фильтрацию last / preLast)
+		# пока что игнорирую алармы от RGBD
+		if msg.header.frame_id == 'rgbd':
+			return
+
 		if DEBUG:
 			node.get_logger().info('ModeSafetyStop: got alarm')
 
@@ -394,6 +491,13 @@ class VedrusControlerNode(Node):
 		self.publisherLeft = self.create_publisher(MotorPID, 'vedrus/left/pid', 10)
 		self.publisherRight = self.create_publisher(MotorPID, 'vedrus/right/pid', 10)
 
+		# magnetic bearing
+		self.create_subscription(
+			Float32,
+			'/imu/bearing',
+			self.bearing_callback,
+			10)
+
 		# keepalive
 		self.publisher_keepalive = self.create_publisher(KeepAlive, '/vedrus/keepalive/controller', 10)
 		self.create_timer(0.33333333, self.timer_keepalive)
@@ -416,6 +520,11 @@ class VedrusControlerNode(Node):
 
 		if DEBUG:
 			self.get_logger().info('VedrusControlerNode is started')
+
+
+	bearing = None
+	def bearing_callback(self, msg):
+		self.bearing = msg.data
 
 
 	# safety

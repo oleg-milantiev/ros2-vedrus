@@ -6,6 +6,11 @@ from rclpy.node import Node
 import threading
 from vedrus_interfaces.msg import Safety, KeepAlive, MotorMove, MotorPID, Status
 
+# TDB ад! :)
+import sys
+sys.path.insert(0, '/opt/ros/iron/build/vedrus/vedrus')
+from rclpy_param_helper import call_get_parameters, call_set_parameters
+
 
 '''
 TODO
@@ -19,6 +24,7 @@ class ServerNode(Node):
 
 	async def web_status(self, request):
 		data = {
+			'ardu': self.ardu,
 			'controller': self.controller,
 			'safety': self.safety,
 			'motor': {
@@ -36,6 +42,19 @@ class ServerNode(Node):
 
 	async def web_control(self, request):
 		data = await request.json()
+
+		try:
+			dataFloat = {
+				'p': float(data['ardu_p']),
+				'i': float(data['ardu_i']),
+				'd': float(data['ardu_d']),
+			}
+		except ValueError as ex:
+			print(ex)
+			return
+
+		call_set_parameters(self, '/vedrus_ardu', dataFloat)
+
 		# Handle the POST request data
 		return web.Response(text='OK')
 
@@ -59,6 +78,9 @@ class ServerNode(Node):
 	def __init__(self):
 		super().__init__('vedrus_server_node')
 
+		self.ardu = call_get_parameters(self, '/vedrus_ardu', ['p', 'i', 'd'])
+		print(self.ardu)
+
 		self.web_thread = threading.Thread(target=self.run_server, args=(self.aiohttp_server(),))
 		self.web_thread.start()
 
@@ -73,6 +95,7 @@ class ServerNode(Node):
 		self.create_subscription(MotorPID, '/vedrus/right/pid', self.motorPID_right_callback, 10)
 
 	safety = []
+	ardu = None
 	motorPidLeft = None
 	motorPidRight = None
 	motorMoveLeft = None
@@ -118,7 +141,6 @@ class ServerNode(Node):
 		self.safety.append({
 			'time': time,
 			'id': msg.header.frame_id,
-			#'azimuth': msg.azimuth - 360. if msg.azimuth > 180. else msg.azimuth, # -180 ... +180
 			'azimuth': msg.azimuth,
 			'range': msg.range,
 		})
