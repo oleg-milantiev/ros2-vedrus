@@ -1,0 +1,4 @@
+http://dan.drown.org/stm32duino/package_STM32duino_index.json
+https://github.com/stm32duino/BoardManagerFiles/raw/master/STM32/package_stm_index.json
+
+orangepi-config / system / hardware / i2c3-m0
