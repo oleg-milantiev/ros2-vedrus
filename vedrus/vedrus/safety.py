@@ -8,14 +8,57 @@ TBD
 640x360 6,15,30,60,90
 480x270 6,15,30,60,90
 424x240 6,15,30,60,90
+
+# ros2 topic list
+/imu/bearing
+/parameter_events
+/rosout
+/tf_static
+/vedrus/adc_values
+/vedrus/bme280_data/humidity
+/vedrus/bme280_data/pressure
+/vedrus/bme280_data/temperature
+/vedrus/camera/front/color/camera_info
+/vedrus/camera/front/color/image_raw
+/vedrus/camera/front/color/image_raw/compressed
+/vedrus/camera/front/color/image_raw/compressedDepth
+/vedrus/camera/front/color/image_raw/theora
+/vedrus/camera/front/color/metadata
+/vedrus/camera/front/depth/camera_info
+/vedrus/camera/front/depth/image_rect_raw
+/vedrus/camera/front/depth/image_rect_raw/compressed
+/vedrus/camera/front/depth/image_rect_raw/compressedDepth
+/vedrus/camera/front/depth/image_rect_raw/theora
+/vedrus/camera/front/depth/metadata
+/vedrus/camera/front/extrinsics/depth_to_color
+/vedrus/camera/left/camera_info
+/vedrus/camera/left/image_raw
+/vedrus/camera/left/image_raw/compressed
+/vedrus/camera/left/image_raw/compressedDepth
+/vedrus/camera/left/image_raw/theora
+/vedrus/camera/rear/camera_info
+/vedrus/camera/rear/image_raw
+/vedrus/camera/rear/image_raw/compressed
+/vedrus/camera/rear/image_raw/compressedDepth
+/vedrus/camera/rear/image_raw/theora
+/vedrus/camera/right/camera_info
+/vedrus/camera/right/image_raw
+/vedrus/camera/right/image_raw/compressed
+/vedrus/camera/right/image_raw/compressedDepth
+/vedrus/camera/right/image_raw/theora
+/vedrus/motor/command
+/vedrus/motor/status
+/vedrus/sonar
+/yolov8/img_out
+/yolov8/inference
 '''
-import rclpy
-from rclpy.node import Node
-from vedrus_interfaces.msg import Safety, Sonar, MotorMove, KeepAlive
+import rclpy # type: ignore
+from rclpy.node import Node # type: ignore
+from vedrus_interfaces.msg import Safety, Sonar, MotorCommand, KeepAlive
 from yolov8_interfaces.msg import InferenceResult, Yolov8Inference
 
-from sensor_msgs.msg import Image
-from cv_bridge import CvBridge
+from sensor_msgs.msg import Image # type: ignore
+from cv_bridge import CvBridge # type: ignore
 import cv2
 import sys
 import time
@@ -30,11 +73,15 @@ MAX_Y = 120
 #TBD читать из инфо камеры
 CAMERA_AZIMUTH = {
 	'front': 0.,
-	'back': 180.,
+	'left': 250.,
+	'right': 110.,
+	'rear': 180.,
 	}
 CAMERA_FOV = {
 	'front': 91.2,
-	'back': 80.,
+	'left': 130.,
+	'right': 130.,
+	'rear': 130.,
 	}
 
 DEPTH_PUBLISH_TOPIC = '/img_out'
@@ -52,7 +99,7 @@ class SafetyNode(Node):
 
 		self.create_subscription(
 			Image,
-			'/depth/image_rect_raw',
+			'/vedrus/camera/front/depth/image_rect_raw',
 			self.depth_camera_callback,
 			10)
 		self.create_subscription(
@@ -101,14 +148,16 @@ class SafetyNode(Node):
 
 			self.get_logger().info('Got controller keepalive timeout!')
 
-			msg = MotorMove()
+			msg = MotorCommand()
+			msg.header.stamp = self.get_clock().now().to_msg()
+			msg.header.frame_id = 'left'
+			msg.speed = 0
 			msg.crash = True
-			# TBD надо ли все поля перечислить?
 
-			publisher = self.create_publisher(MotorMove, '/vedrus/left/move', 10)
+			publisher = self.create_publisher(MotorCommand, '/vedrus/motor/command', 10)
 			publisher.publish(msg)
 
-			publisher = self.create_publisher(MotorMove, '/vedrus/right/move', 10)
+			msg.header.frame_id = 'right'
 			publisher.publish(msg)
 
 
