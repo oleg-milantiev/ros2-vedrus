@@ -55,7 +55,7 @@ def generate_launch_description():
 
 import rclpy # type: ignore
 from rclpy.node import Node # type: ignore
-import serial
+import serial # type: ignore
 from std_msgs.msg import Header # type: ignore
 from vedrus_interfaces.msg import MotorCommand, MotorStatus
 from threading import Thread, Lock
