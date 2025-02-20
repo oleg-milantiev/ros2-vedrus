@@ -1,0 +1,1 @@
+e:/yolo-world/scripts/yolo predict model=runs/detect/train7/weights/best.pt source=0 show=True conf=0.25 save=False

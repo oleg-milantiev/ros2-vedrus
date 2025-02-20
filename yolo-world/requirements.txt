@@ -1,0 +1,6 @@
+open-clip-torch
+opencv-python
+ultralytics
+numpy
+scikit-learn
+git+https://github.com/ultralytics/CLIP.git
