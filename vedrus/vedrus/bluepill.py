@@ -150,6 +150,8 @@ class BluePillNode(Node):
                         self.publisher.publish(status)
             except serial.SerialException as e:
                 self.get_logger().error(f"Error reading from serial port: {e}")
+            except UnicodeDecodeError as e:
+                self.get_logger().warn(f"Unicode decode error: {e}")
 
     def parse_motor_status(self, line: str) -> MotorStatus:
         try:
