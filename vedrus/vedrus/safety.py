@@ -56,220 +56,159 @@ import rclpy # type: ignore
 from rclpy.node import Node # type: ignore
 from vedrus_interfaces.msg import Safety, Sonar, MotorCommand, KeepAlive
 from yolov8_interfaces.msg import InferenceResult, Yolov8Inference
-
 from sensor_msgs.msg import Image # type: ignore
 from cv_bridge import CvBridge # type: ignore
 import cv2
-import sys
-import time
-bridge = CvBridge()
-
 import numpy as np
 from scipy.ndimage import center_of_mass, label
+import time
 
-MAX_X = 212
-MAX_Y = 120
-
-#TBD читать из инфо камеры
-CAMERA_AZIMUTH = {
-	'front': 0.,
-	'left': 250.,
-	'right': 110.,
-	'rear': 180.,
-	}
-CAMERA_FOV = {
-	'front': 91.2,
-	'left': 130.,
-	'right': 130.,
-	'rear': 130.,
-	}
-
+CAMERA_AZIMUTH = {'front': 0., 'left': 250., 'right': 110., 'rear': 180.}
+CAMERA_FOV = {'front': 91.2, 'left': 130., 'right': 130., 'rear': 130.}
 DEPTH_PUBLISH_TOPIC = '/img_out'
 
-#TBD
-#YOLO_RANGE_ALARM = {
-#	'max': 
-#	}
+bridge = CvBridge()
 
 class SafetyNode(Node):
-	crash = False
+    def __init__(self):
+        super().__init__('safety_node')
+        self.crash = False
+        self.depth_count = 0
+        
+        self.create_subscription(Image, '/vedrus/camera/front/depth/image_rect_raw', 
+                               self.depth_camera_callback, 1) 
+        self.create_subscription(Sonar, '/vedrus/sonar', self.sonar_callback, 1)
+        self.create_subscription(Yolov8Inference, '/yolov8/inference', self.yolo_callback, 1)
 
-	def __init__(self):
-		super().__init__('safety_node')
+        self.publisher_safety = self.create_publisher(Safety, '/vedrus/safety', 1)
+        self.publisher_keepalive = self.create_publisher(KeepAlive, '/vedrus/keepalive/safety', 1)
+        self.create_timer(0.33333333, self.timer_keepalive)
+        self.create_subscription(KeepAlive, '/vedrus/keepalive/controller', 
+                               self.controller_keepalive_callback, 1)
+        
+        self.keepalive = time.time() + 10  # 10 sec keepalive start gap
+        
+        if 'DEPTH_PUBLISH_TOPIC' in globals():
+            self.publisher_depth = self.create_publisher(Image, DEPTH_PUBLISH_TOPIC, 1)
 
-		self.create_subscription(
-			Image,
-			'/vedrus/camera/front/depth/image_rect_raw',
-			self.depth_camera_callback,
-			10)
-		self.create_subscription(
-			Sonar,
-			'/vedrus/sonar',
-			self.sonar_callback,
-			10)
-		self.create_subscription(
-			Yolov8Inference,
-			'/yolov8/inference',
-			self.yolo_callback,
-			10)
+        self.get_logger().info('Start Safety')
 
-		self.publisher_safety = self.create_publisher(Safety, '/vedrus/safety', 10)
+    def controller_keepalive_callback(self, data):
+        self.keepalive = time.time()
 
-		self.publisher_keepalive = self.create_publisher(KeepAlive, '/vedrus/keepalive/safety', 10)
-		self.create_timer(0.33333333, self.timer_keepalive)
-		self.create_subscription(
-			KeepAlive,
-			'/vedrus/keepalive/controller',
-			self.controller_keepalive_callback,
-			10)
-		self.keepalive = time.time() + 10 # 10 sec keepalive start gap
+    def timer_keepalive(self):
+        if self.crash:
+            return
 
-		if 'DEPTH_PUBLISH_TOPIC' in globals():
-			self.publisher_depth = self.create_publisher(Image, DEPTH_PUBLISH_TOPIC, 10)
+        msg = KeepAlive()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = 'safety'
+        self.publisher_keepalive.publish(msg)
 
-		self.get_logger().info('Start Safety')
+        if time.time() - self.keepalive >= 2:
+            self.crash = True
+            self.get_logger().info('Got controller keepalive timeout!')
+            
+            msg = MotorCommand()
+            msg.header.stamp = self.get_clock().now().to_msg()
+            msg.speed = 0
+            msg.crash = True
+            
+            publisher = self.create_publisher(MotorCommand, '/vedrus/motor/command', 1)
+            for side in ['left', 'right']:
+                msg.header.frame_id = side
+                publisher.publish(msg)
 
-	def controller_keepalive_callback(self, data):
-		self.keepalive = time.time()
+    def yolo_callback(self, data):
+        for inference in data.yolov8_inference:
+            if inference.class_name in ['person', 'dog', 'cat', 'car']:
+                msg = Safety()
+                msg.header.frame_id = f'yolo:{inference.class_name}'
+                msg.header.stamp = self.get_clock().now().to_msg()
+                msg.alarm = False
+                msg.warning = True
+                msg.range = 100.  # TBD: калибровка через размер бокса
+                center_x = (inference.right + inference.left) / 2.0 - 320.0
+                azimuth = (center_x / 320.0) * CAMERA_FOV[data.header.frame_id] / 2.0 + CAMERA_AZIMUTH[data.header.frame_id]
+                msg.azimuth = self.__az360(azimuth)
+                self.publisher_safety.publish(msg)
 
-	def timer_keepalive(self):
-		if self.crash:
-			return
+    def sonar_callback(self, data):
+        if 0. < data.range < 100.:
+            msg = Safety()
+            msg.header.frame_id = 'sonar'
+            msg.header.stamp = self.get_clock().now().to_msg()
+            msg.alarm = data.range < 50.
+            msg.warning = 50. <= data.range < 100.
+            msg.range = data.range
+            msg.azimuth = data.azimuth
+            self.publisher_safety.publish(msg)
 
-		# отправлю свой keepalive
-		msg = KeepAlive()
-		msg.header.stamp = self.get_clock().now().to_msg()
-		msg.header.frame_id = 'safety'
-		self.publisher_keepalive.publish(msg)
+    def depth_camera_callback(self, data):
+        # Downrate from 30 to 5 fps
+        self.depth_count += 1
+        if self.depth_count % 6 != 0:
+            return  
 
-		# проверю контроллера keepalive
-		if time.time() - self.keepalive >= 2:
-			self.crash = True
+        start_time = time.time()
+        
+        # Convert ROS Image 848x480x30 into OpenCV image 212x120x5
+        depth_image = np.clip((bridge.imgmsg_to_cv2(data, desired_encoding='passthrough')[::4, ::4] >> 2), 0, 255).astype(np.uint8)
+        '''
+        # not tested. Must work slow
+        depth_image = cv2.resize(
+            bridge.imgmsg_to_cv2(data, desired_encoding='passthrough'),
+            (0, 0),
+            fx=0.25, fy=0.25,
+            interpolation=cv2.INTER_AREA
+        ).astype(np.uint8)
+        '''
 
-			self.get_logger().info('Got controller keepalive timeout!')
+        # erase zeros = frame, and its gradient
+        depth_image[0:120, 0:6] = 255 # left line
+        depth_image[0:20, 0:8] = 255 # up-left corner
+        depth_image[0:1, 0:212] = 255 # up line
+        depth_image[119, 0:212] = 255 # down line
+        depth_image[115:119, 200:212] = 255 # down-right corner
 
-			msg = MotorCommand()
-			msg.header.stamp = self.get_clock().now().to_msg()
-			msg.header.frame_id = 'left'
-			msg.speed = 0
-			msg.crash = True
+        min_depth = 0      # 0/4 мм
+        max_depth = 500/4  # 500 мм
+        
+        mask = cv2.inRange(depth_image, min_depth, max_depth)
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-			publisher = self.create_publisher(MotorCommand, '/vedrus/motor/command', 10)
-			publisher.publish(msg)
+        stamp = self.get_clock().now().to_msg()
 
-			msg.header.frame_id = 'right'
-			publisher.publish(msg)
+        for contour in contours:
+            area = cv2.contourArea(contour)
+            if area > 10:
+                # Calculate moments to find the center of mass
+                M = cv2.moments(contour)
+                if M['m00'] != 0:  
+                    cx = int(M['m10'] / M['m00'])
+                    #cy = int(M['m01'] / M['m00'])
 
+                    msg = Safety()
+                    msg.header.frame_id = 'rgbd'
+                    msg.header.stamp = stamp
+                    msg.alarm = True
+                    msg.warning = False
+                    msg.range = 50.
+                    msg.azimuth = self.__az360((cx * 2.0 / 212 - 1.0) * CAMERA_FOV['front'] / 2.0)
+                    self.publisher_safety.publish(msg)
 
-	def yolo_callback(self, data):
-		for inference in data.yolov8_inference:
-			if inference.class_name in ['person', 'dog', 'cat', 'car']:
-				msg = Safety()
-				msg.header.frame_id = 'yolo:'+ inference.class_name
-				msg.header.stamp = self.get_clock().now().to_msg()
-				msg.alarm = False
-				msg.warning = True
-				msg.range = 100. # TBD через размер бокса, в зависимости от класса
-				msg.azimuth = self.__az360((((inference.right - inference.left) / 2. + inference.left - 320.) / 320.) * CAMERA_FOV[data.header.frame_id] / 2. + CAMERA_AZIMUTH[data.header.frame_id])
-				self.publisher_safety.publish(msg)
+        if 'DEPTH_PUBLISH_TOPIC' in globals():
+            self.publisher_depth.publish(bridge.cv2_to_imgmsg(mask, encoding='mono8'))
 
-	def sonar_callback(self, data):
-		#return #DEBUG
-		if 0. < data.range < 100.:
-			msg = Safety()
-			msg.header.frame_id = 'sonar'
-			msg.header.stamp = self.get_clock().now().to_msg()
-			msg.alarm = 0. < data.range < 50.
-			msg.warning = 50. < data.range < 100.
-			msg.range = data.range
-			msg.azimuth = data.azimuth
-			self.publisher_safety.publish(msg)
-
-	# Пара массивов прошлых и препрошлых глубин raw
-	depths50Last = []
-	depths50Prelast = []
-	depths100Last = []
-	depths100Prelast = []
-
-	def depth_camera_callback(self, data):
-		def rebin(a, shape):
-			sh = shape[0],a.shape[0]//shape[0],shape[1],a.shape[1]//shape[1]
-			return a.reshape(sh).mean(-1).mean(1)
-
-		arr = np.array(bridge.imgmsg_to_cv2(data, 'passthrough'))
-		arr = rebin(arr, (MAX_Y, MAX_X)) / 32
-		arr = np.where(arr > 255, 255, arr)
-
-		# затереть нолики = рамку. И её градиент
-		#arr[0:30, 0:30] = 255
-		#arr[0:MAX_Y, 0:5] = 255
-		#arr[0:30, 0:MAX_X] = 255
-		#arr[MAX_Y - 1, 0:MAX_X] = 255
-
-		def centers(mask):
-			# уменьшу разрешение маски по min для фильтрации мелкого мусора
-			mask = mask.reshape(MAX_Y // 2, 2, MAX_X // 2, 2).min(axis=(3, 1))
-			mask = np.kron(mask, np.ones((2, 2)))
-			lbl = label(mask, np.ones((3,3)))
-
-			if lbl[1] == 0:
-				return []
-
-			# уберу лейблы с малым весом (колвом точек)
-			index = []
-			for i in range(1, lbl[1]+1):
-				if np.where(lbl[0] == i, 1, 0).sum() > 10:
-					index.append(i)
-
-			if len(index) == 1:
-				return [center_of_mass(mask)]
-			else:
-				return center_of_mass(mask, lbl[0], index)
-
-		cc = centers(np.where(((arr > 3) & (arr < 16)), 1, 0))
-
-		#self.depths50PreLast = self.depth50Last[:]
-		#self.depths50Last = cc[:]
-
-		stamp = self.get_clock().now().to_msg()
-
-		for c in cc:
-			msg = Safety()
-			msg.header.frame_id = 'rgbd'
-			msg.header.stamp = stamp
-			msg.alarm = True
-			msg.warning = False
-			msg.range = 50. # TBD калибрануть Z
-			msg.azimuth = self.__az360((c[1] * 2. / float(MAX_X) - 1.) * CAMERA_FOV['front'] / 2)
-			self.publisher_safety.publish(msg)
-			arr[int(c[0]),int(c[1])] = 250
-
-		cc = centers(np.where((18 < arr) & (arr < 34), 1, 0))
-
-		for c in cc:
-			msg = Safety()
-			msg.header.frame_id = 'rgbd'
-			msg.header.stamp = stamp
-			msg.alarm = False
-			msg.warning = True
-			msg.range = 100. # TBD калибрануть Z
-			msg.azimuth = self.__az360((c[1] * 2. / float(MAX_X) - 1.) * CAMERA_FOV['front'] / 2)
-			self.publisher_safety.publish(msg)
-			arr[int(c[0]),int(c[1])] = 150
-
-		if 'DEPTH_PUBLISH_TOPIC' in globals():
-			self.publisher_depth.publish(bridge.cv2_to_imgmsg(arr.astype('uint8'), encoding='mono8'))
-
-	def __az360(self, azimuth):
-		return azimuth + 360 if azimuth < 0 else azimuth;
+    def __az360(self, azimuth):
+        return azimuth + 360.0 if azimuth < 0 else azimuth
 
 def main(args=None):
-	rclpy.init(args=args)
-	node = SafetyNode()
-	rclpy.spin(node)
-
-	node.destroy_node()
-	rclpy.shutdown()
+    rclpy.init(args=args)
+    node = SafetyNode()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
 
 if __name__ == '__main__':
-	main()
+    main()
