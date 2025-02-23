@@ -3,13 +3,22 @@
 
 ---
 
-## Features
+## Included nodes
 
-3. **Node Initialization**:
-   - **Realsense Camera**: Launches the `realsense2_camera_node` with specific parameters for depth, color, and other settings.
-   - **Controller**: Manages the robot's overall behavior.
-   - **Bluepill**: Handles motor control with PID parameters.
-   - **Safety**: Ensures safe operation.
+- **Realsense Camera**: Launches the `realsense2_camera_node` with specific parameters for depth, color, and other settings.
+- **Controller**: Manages the robot's overall behavior.
+- **Bluepill**: Handles motor control with PID parameters.
+- **Safety**: Ensures safe operation.
+
+realsense profiles, got by running rs-enumerate-devices:
+    Depth       1280x720       Z16         @ 30/15/6 Hz
+    Depth        848x480       Z16         @ 90/60/30/15/6 Hz
+    Depth        848x100       Z16         @ 300/100 Hz
+    Depth        640x480       Z16         @ 90/60/30/15/6 Hz
+    Depth        640x360       Z16         @ 90/60/30/15/6 Hz
+    Depth        480x270       Z16         @ 90/60/30/15/6 Hz
+    Depth        424x240       Z16         @ 90/60/30/15/6 Hz
+    Depth        256x144       Z16         @ 300/90 Hz
 
 """
 
@@ -34,8 +43,10 @@ def generate_launch_description():
                 {'enable_accel': False},
                 {'enable_gyro': False},
                 {'hole_filling_filter.enable': True},
-                {'depth_module.profile': '848x480x15'},
-                {'rgb_camera.profile': '640x480x15'},
+#                {'depth_module.profile': '424x240x6'}, # I need it! But realsense node just ignoring it
+                {'depth_module.profile': '848x480x30'}, # Will downscale and downrate it in the safety node
+                {'rgb_camera.profile': '640x480x30'},   # Will downrate in yolo node
+                {'verbose_logging': True},
                 {'enable_auto_exposure': True},
             ]
         ),
