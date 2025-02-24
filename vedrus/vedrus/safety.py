@@ -153,23 +153,20 @@ class SafetyNode(Node):
         start_time = time.time()
         
         # Convert ROS Image 848x480x30 into OpenCV image 212x120x5
-        depth_image = np.clip((bridge.imgmsg_to_cv2(data, desired_encoding='passthrough')[::4, ::4] >> 2), 0, 255).astype(np.uint8)
-        '''
-        # not tested. Must work slow
-        depth_image = cv2.resize(
-            bridge.imgmsg_to_cv2(data, desired_encoding='passthrough'),
+        #depth_image = np.clip((bridge.imgmsg_to_cv2(data, desired_encoding='passthrough')[::4, ::4] >> 2), 0, 255).astype(np.uint8)
+        depth_image = np.clip(cv2.resize(
+            bridge.imgmsg_to_cv2(data, desired_encoding='passthrough') >> 2,
             (0, 0),
             fx=0.25, fy=0.25,
             interpolation=cv2.INTER_AREA
-        ).astype(np.uint8)
-        '''
+        ), 0, 255).astype(np.uint8)
 
         # erase zeros = frame, and its gradient
-        depth_image[0:120, 0:6] = 255 # left line
+        depth_image[0:120, 0:7] = 255 # left line
         depth_image[0:20, 0:8] = 255 # up-left corner
         depth_image[0:1, 0:212] = 255 # up line
         depth_image[119, 0:212] = 255 # down line
-        depth_image[115:119, 200:212] = 255 # down-right corner
+        depth_image[115:119, 195:212] = 255 # down-right corner
 
         min_depth = 0      # 0/4 мм
         max_depth = 500/4  # 500 мм
