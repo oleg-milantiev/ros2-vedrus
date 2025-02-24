@@ -164,9 +164,9 @@ class BluePillNode(Node):
             msg.header = Header()
             msg.header.stamp = self.get_clock().now().to_msg()
             msg.header.frame_id = self.motor_name
-            msg.position = int(data['POS'])
-            msg.speed = float(data['SPD'])
-            msg.target = float(data['TGT'])
+            msg.position = -int(data['POS']) if self.reverse else int(data['POS'])   
+            msg.speed = -float(data['SPD']) if self.reverse else float(data['SPD'])
+            msg.target = -float(data['TGT']) if self.reverse else float(data['TGT'])
             msg.power = float(data['PWR'])
             return msg
 
