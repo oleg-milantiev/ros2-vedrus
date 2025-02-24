@@ -38,7 +38,7 @@ class VedrusControlerNode(Node):
         msg.speed = speed
         self.publisherMotor.publish(msg)
 
-        leftSpeed = speed
+        self.leftSpeed = speed
 
         return
 
@@ -53,7 +53,7 @@ class VedrusControlerNode(Node):
         msg.speed = speed
         self.publisherMotor.publish(msg)
 
-        rightSpeed = speed
+        self.rightSpeed = speed
 
         return
 
@@ -121,7 +121,7 @@ class VedrusControlerNode(Node):
         # начальный режим и его параметры (здесь: роутинг)
         if self.mode is None:
             if DEBUG:
-                self.get_logger().info('VedrusControlerNode: task_safety_short_forward_reverse: Start first mode: move +20k')
+                self.get_logger().info('VedrusControlerNode: task_safety_short_forward_reverse: Go to ModeSafetyStop. Will route to ModeMoveFixed +20k')
             self.mode = ModeSafetyStop(self)
             self.mode.out = ModeMoveFixed(self)
             self.mode.out.incLeft = 20000
@@ -130,7 +130,7 @@ class VedrusControlerNode(Node):
         # зациклить роутинг +20к, -20к, +, -, ...
         if isinstance(self.mode, ModeMoveFixed) and self.mode.out == None:
             if DEBUG:
-                self.get_logger().info(f"VedrusControlerNode: task_safety_short_forward_reverse: Start next mode: move :{-self.mode.incLeft}")
+                self.get_logger().info(f"VedrusControlerNode: task_safety_short_forward_reverse: Set next mode: ModeMoveFixed: {-self.mode.incLeft}")
             self.mode.out = ModeMoveFixed(self)
             self.mode.out.incLeft = -self.mode.incLeft
             self.mode.out.incRight = -self.mode.incRight

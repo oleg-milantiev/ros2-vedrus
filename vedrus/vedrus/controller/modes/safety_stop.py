@@ -30,12 +30,16 @@ class ModeSafetyStop(ModeParent):
 		# выход из стопа в self.out после 2 секунд без safety::alarm
 		if time.time() - self.lastAlarmTime > 2:
 			if DEBUG:
-				self.node.get_logger().info('ModeSafetyStop: alarm 2 seconds ago. Route to out')
+				self.node.get_logger().info(f"ModeSafetyStop: alarm 2 seconds ago. Route out to {self.out.__class__.__name__}")
 
 			self._statusAppend('action', 'Route out')
 			self._statusPublish()
 
-			return self.out
+			if self.out:
+				return self.out
+			else:
+				self.node.get_logger().info(f"ModeSafetyStop: No out route! Will wait")
+				return self
 
 		#if DEBUG:
 		#	self.node.get_logger().info('ModeSafetyStop: continue stay...')

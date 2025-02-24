@@ -22,6 +22,9 @@ class ModeMoveFixed(ModeParent):
     incLeft = 0
     incRight = 0
 
+    speedLeft = 500
+    speedRight = 500
+
     # поймал safety.warning
     def warning(self, msg):
         pass
@@ -39,25 +42,29 @@ class ModeMoveFixed(ModeParent):
         if self.startLeft == None:
             # вход в режим. Начало движения
             if DEBUG:
-                self.node.get_logger().info('ModeMoveFixed: start to move')
+                self.node.get_logger().info(f"ModeMoveFixed: Start to move ({self.incLeft},{self.incRight})")
 
             self.startLeft = self.node.motorLeft.position
             self.startRight = self.node.motorRight.position
 
-            self.node.left(500 if self.incLeft > 0 else -500)
-            self.node.right(500 if self.incRight > 0 else -500)
+            if self.incLeft != 0:
+                self.node.left(self.speedLeft if self.incLeft > 0 else -self.speedLeft)
+            if self.incRight != 0:
+                self.node.right(self.speedRight if self.incRight > 0 else -self.speedRight)
         else:
             # рабочий режим
 
             # дошёл до нужной позиции? Останови мотор
-            if  (self.incLeft >  0 and self.node.motorLeft.position >= self.startLeft + self.incLeft) or \
-                (self.incLeft <= 0 and self.node.motorLeft.position <= self.startLeft + self.incLeft):
+            if  self.node.leftSpeed != 0 and \
+                ((self.incLeft > 0 and self.node.motorLeft.position >= self.startLeft + self.incLeft) or \
+                (self.incLeft <= 0 and self.node.motorLeft.position <= self.startLeft + self.incLeft)):
                 if DEBUG:
                     self.node.get_logger().info('ModeMoveFixed: stop left motor')
                 self.node.left(0)
 
-            if  (self.incRight >  0 and self.node.motorRight.position >= self.startRight + self.incRight) or \
-                (self.incRight <= 0 and self.node.motorRight.position <= self.startRight + self.incRight):
+            if  self.node.rightSpeed != 0 and \
+                ((self.incRight > 0 and self.node.motorRight.position >= self.startRight + self.incRight) or \
+                (self.incRight <= 0 and self.node.motorRight.position <= self.startRight + self.incRight)):
                 if DEBUG:
                     self.node.get_logger().info('ModeMoveFixed: stop right motor')
                 self.node.right(0)
@@ -66,7 +73,7 @@ class ModeMoveFixed(ModeParent):
             if self.node.leftSpeed == 0 and self.node.rightSpeed == 0:
                 if DEBUG:
                     self.node.get_logger().info('ModeMoveFixed: end of mode')
-                return route.out
+                return self.out
 
 
         # случайная одиночная тревога за 0.5с. Игнорю
@@ -83,9 +90,23 @@ class ModeMoveFixed(ModeParent):
 
             self.node.left(0)
             self.node.right(0)
+            
+            # сброс тревог для дальнейшего начала движения
+            self.alarmCount = 0
+            
+            # уменьшить inc на пройденное расстояние
+            self.incLeft  = max(0, self.incLeft  - (self.node.motorLeft.position  - self.startLeft))
+            self.incRight = max(0, self.incRight - (self.node.motorRight.position - self.startRight))
+            
+            # сброс для дальнейшего начала движения
+            self.startLeft = None
+            self.startRight = None
 
             route = ModeSafetyStop(self.node)
             route.out = self
+
+            if DEBUG:
+                self.node.get_logger().info('ModeMoveFixed: route to ModeSafetyStop with return to self')
 
             return route
 
