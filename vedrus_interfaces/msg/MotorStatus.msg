@@ -3,3 +3,4 @@ int32 position
 float32 speed
 float32 target
 float32 power
+int16 max_power

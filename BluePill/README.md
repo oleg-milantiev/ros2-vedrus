@@ -84,6 +84,8 @@ The controller accepts the following commands through serial port at 115200 baud
   - Negative values move reverse
   - Example: `M5` sets speed to 5 units forward
   - Example: `M-5` sets speed to 5 units reverse
+- `X[max_pwm]` - Set maximum PWM value
+  - Example: `X15` sets the maximum PWM value to 15
 
 ### Python Control Script
 
@@ -103,7 +105,7 @@ python3 serial_control.py
 
 The controller sends status messages every 50ms in the following format:
 ```
-SIDE,POS:[position],SPD:[current_speed],TGT:[target_speed],PWR:[motor_power]
+SIDE,POS:[position],SPD:[current_speed],TGT:[target_speed],PWR:[motor_power],MAX_PWM:[max_pwm]
 ```
 
 Where:
@@ -112,6 +114,7 @@ Where:
 - `current_speed`: Actual speed in ticks/second
 - `target_speed`: Commanded speed
 - `motor_power`: PWM output (-PWR_MAX to PWR_MAX)
+- `max_pwm`: Current maximum PWM value
 
 ## Hardware Configuration
 
@@ -271,6 +274,8 @@ This project is released under the MIT License. Feel free to use, modify, and di
   - Отрицательные значения - движение назад
   - Пример: `M5` устанавливает скорость 5 единиц вперед
   - Пример: `M-5` устанавливает скорость 5 единиц назад
+- `X[max_pwm]` - Установить максимальное значение ШИМ
+  - Пример: `X15` устанавливает максимальное значение ШИМ на 15
 
 ### Скрипт управления на Python
 
@@ -297,7 +302,7 @@ python3 serial_control.py
 
 The controller sends status messages every 50ms in the following format:
 ```
-SIDE,POS:[position],SPD:[current_speed],TGT:[target_speed],PWR:[motor_power]
+SIDE,POS:[position],SPD:[current_speed],TGT:[target_speed],PWR:[motor_power],MAX_PWM:[max_pwm]
 ```
 
 Где:
@@ -306,6 +311,7 @@ SIDE,POS:[position],SPD:[current_speed],TGT:[target_speed],PWR:[motor_power]
 - `current_speed`: Фактическая скорость в тиках в секунду
 - `target_speed`: Заданная скорость
 - `motor_power`: Выход ШИМ (от -PWR_MAX до PWR_MAX)
+- `max_pwm`: Текущее максимальное значение ШИМ
 
 ## Тестирование энкодеров
 

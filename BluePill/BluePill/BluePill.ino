@@ -37,7 +37,7 @@
 const bool IS_LEFT_SIDE = true;  // Set to false for right side
 const char* SIDE_NAME = IS_LEFT_SIDE ? "VEDL" : "VEDR";
 const int TICKS_WHEEL = 16384;    // Encoder ticks per wheel revolution
-const int MAX_PWM = 20;          // Maximum PWM value for motor control
+int MAX_PWM = 20;          // Maximum PWM value for motor control
 
 // Pin definitions
 const int LED_PIN = PC13;   // Internal LED pin
@@ -231,6 +231,14 @@ void processSerialCommands() {
           while (Serial.available()) Serial.read();
         }
         break;
+
+      case 'X': // Set MAX_PWM
+        if (Serial.available()) {
+          MAX_PWM = Serial.parseInt();
+          motorPID.SetOutputLimits(-MAX_PWM, MAX_PWM);
+          while (Serial.available()) Serial.read();
+        }
+        break;
     }
   }
 }
@@ -253,7 +261,9 @@ void sendStatus() {
   Serial.print("/");
   Serial.print(Ki, 3);
   Serial.print("/");
-  Serial.println(Kd, 3);
+  Serial.print(Kd, 3);
+  Serial.print(",MAX_PWM:");
+  Serial.println(MAX_PWM);
 }
 
 void brightLED() {

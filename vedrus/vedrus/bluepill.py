@@ -16,6 +16,7 @@ via UART. The node communicates with the motor controller by sending and receivi
 - `I` (float, default: -1): Integral gain for the PID controller.
 - `D` (float, default: -1): Derivative gain for the PID controller.
 - `reverse` (boolean, default: False): Indicates whether to reverse the motor movement direction.
+- `max_pwm` (int, default: -1): Maximum PWM value for motor control (negative value means not set).
 
 ### Subscribed Topics:
 - `/vedrus/motor/command` (vedrus_interface/MotorCommand):
@@ -29,7 +30,7 @@ via UART. The node communicates with the motor controller by sending and receivi
 
 ### Usage:
 #### Run the node:
-ros2 run your_package_name bluepill --ros-args -p P:=0.006 -p I:=0.002 -p reverse:=True
+ros2 run your_package_name bluepill --ros-args -p P:=0.006 -p I:=0.002 -p reverse:=True -p max_pwm:=20
 
 Example Launch File:
 from launch import LaunchDescription
@@ -47,7 +48,8 @@ def generate_launch_description():
                 {'P': 0.01},
                 {'I': 0.02},
                 {'D': 0.005},
-                {'reverse': True}
+                {'reverse': True},
+                {'max_pwm': 20}
             ]
         )
     ])
@@ -74,6 +76,7 @@ class BluePillNode(Node):
         self.declare_parameter('I', -1.)
         self.declare_parameter('D', -1.)
         self.declare_parameter('reverse', False)
+        self.declare_parameter('max_pwm', -1)
 
         self.motor_name = self.get_parameter('name').get_parameter_value().string_value
         self.port = self.get_parameter('port').get_parameter_value().string_value
@@ -81,6 +84,7 @@ class BluePillNode(Node):
         self.I = self.get_parameter('I').get_parameter_value().double_value
         self.D = self.get_parameter('D').get_parameter_value().double_value
         self.reverse = self.get_parameter('reverse').get_parameter_value().bool_value
+        self.max_pwm = self.get_parameter('max_pwm').get_parameter_value().integer_value
 
         # Open UART connection
         try:
@@ -97,6 +101,10 @@ class BluePillNode(Node):
             self.send_command(f"I{self.I:.3f}")
         if self.D != -1.:
             self.send_command(f"D{self.D:.3f}")
+
+        # Send initial max_pwm parameter if set
+        if self.max_pwm != -1:
+            self.send_command(f"X{self.max_pwm}")
 
         # Publishers and subscribers
         self.publisher = self.create_publisher(MotorStatus, '/vedrus/motor/status', 10)
@@ -168,6 +176,8 @@ class BluePillNode(Node):
             msg.speed = -float(data['SPD']) if self.reverse else float(data['SPD'])
             msg.target = -float(data['TGT']) if self.reverse else float(data['TGT'])
             msg.power = float(data['PWR'])
+            # TODO reflash bluepills to implement
+            # msg.max_power = int(data['MAX_PWM'])
             return msg
 
         except (ValueError, KeyError) as e:
