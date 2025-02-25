@@ -120,6 +120,12 @@ class VedrusControlerNode(Node):
 
     def __canWork(self):
         current_time = time.time()
+        
+        # self.get_logger().info(f'keepaliveSafety: {self.keepaliveSafety}')
+        # self.get_logger().info(f'keepaliveMotorLeft: {self.keepaliveMotorLeft}')
+        # self.get_logger().info(f'keepaliveMotorRight: {self.keepaliveMotorRight}')
+        # self.get_logger().info(f'keepaliveBearing: {self.keepaliveBearing}')
+
         return (self.keepaliveSafety is not None and current_time - self.keepaliveSafety < 2 and
                 self.keepaliveMotorLeft is not None and current_time - self.keepaliveMotorLeft < 2 and
                 self.keepaliveMotorRight is not None and current_time - self.keepaliveMotorRight < 2 and

@@ -2,7 +2,7 @@
 ROS2 Node for Reading Four HC-SR04 Sonar Sensors via Sysfs and Publishing Data
 
 This script reads data from four HC-SR04 sonar sensors using sysfs interfaces and publishes
-the readings to a ROS2 topic. The GPIO pins and topic name are configurable through
+the readings to a ROS2 topic. The GPIO pins, topic name, and azimuths are configurable through
 node parameters.
 
 # Installation:
@@ -33,6 +33,7 @@ def generate_launch_description():
                 {'names': ['sensor1', 'sensor2', 'sensor3', 'sensor4']},  # Names for each sensor
                 {'pin_numbers': [127, 125, 124, 144, 122, 120, 123, 121]},  # Example GPIO pins
                 {'topic_name': 'sonar_data'},
+                {'azimuths': [0.0, 90.0, 180.0, 270.0]},  # Example azimuths
             ]
         ),
     ])
@@ -41,9 +42,9 @@ def generate_launch_description():
 ros2 topic echo /sonar_data
 """
 
-import rclpy
-from rclpy.node import Node
-from sensor_msgs.msg import Range
+import rclpy # type: ignore
+from rclpy.node import Node # type: ignore
+from vedrus_interfaces.msg import Sonar
 import time
 import os
 
@@ -56,11 +57,13 @@ class SonarNode(Node):
         self.declare_parameter('pins_echo', [122, 120, 123, 121])
         self.declare_parameter('topic_name', 'sonar_data')
         self.declare_parameter('names', ['sensor1', 'sensor2', 'sensor3', 'sensor4'])
+        self.declare_parameter('azimuths', [0.0, 90.0, 180.0, 270.0])
 
         self.trig_pins = self.get_parameter('pins_trig').get_parameter_value().integer_array_value
         self.echo_pins = self.get_parameter('pins_echo').get_parameter_value().integer_array_value
         self.topic_name = self.get_parameter('topic_name').get_parameter_value().string_value
         self.names = self.get_parameter('names').get_parameter_value().string_array_value
+        self.azimuths = self.get_parameter('azimuths').get_parameter_value().double_array_value
 
         # Export GPIO pins and configure direction for each sensor
         for trig, echo in zip(self.trig_pins, self.echo_pins):
@@ -68,7 +71,7 @@ class SonarNode(Node):
             self._export_pin(echo, "in")
 
         # Create publisher
-        self.publisher_ = self.create_publisher(Range, self.topic_name, 10)
+        self.publisher_ = self.create_publisher(Sonar, self.topic_name, 10)
         self.timer = self.create_timer(0.5, self.read_sonars)  # 2 Hz timer
 
     def _export_pin(self, pin, direction):
@@ -117,16 +120,13 @@ class SonarNode(Node):
             distance = self.read_sonar(trig, echo)
 
             if distance > 0:
-                # Publish the Range message
-                range_msg = Range()
-                range_msg.header.stamp = self.get_clock().now().to_msg()
-                range_msg.header.frame_id = self.names[i]
-                range_msg.radiation_type = Range.ULTRASOUND
-                range_msg.min_range = 0.02  # Minimum measurable range in meters
-                range_msg.max_range = 4.0  # Maximum measurable range in meters
-                range_msg.range = distance / 100.0  # Convert cm to meters
+                msg = Sonar()
+                msg.header.stamp = self.get_clock().now().to_msg()
+                msg.header.frame_id = self.names[i]
+                msg.range = distance / 100.0  # Convert cm to meters
+                msg.azimuth = self.azimuths[i]
 
-                self.publisher_.publish(range_msg)
+                self.publisher_.publish(msg)
 
     def destroy_node(self):
         super().destroy_node()

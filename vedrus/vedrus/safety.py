@@ -55,7 +55,7 @@ TBD
 import rclpy # type: ignore
 from rclpy.node import Node # type: ignore
 from vedrus_interfaces.msg import Safety, Sonar, MotorCommand, KeepAlive
-from yolov8_interfaces.msg import InferenceResult, Yolov8Inference
+from yolov8_interfaces.msg import Yolov8Inference
 from sensor_msgs.msg import Image # type: ignore
 from cv_bridge import CvBridge # type: ignore
 import cv2
@@ -74,20 +74,21 @@ class SafetyNode(Node):
         super().__init__('safety_node')
         self.crash = False
         self.depth_count = 0
+
         # 10 sec keepalive start gap
         self.keepaliveSonar = self.keepaliveDepth = self.keepaliveController = time.time() + 10
-        
-        self.create_subscription(Image, '/vedrus/camera/front/depth/image_rect_raw', 
-                               self.depth_camera_callback, 1) 
-        self.create_subscription(Sonar, '/vedrus/sonar', self.sonar_callback, 1)
-        self.create_subscription(Yolov8Inference, '/yolov8/inference', self.yolo_callback, 1)
 
-        self.publisher_safety = self.create_publisher(Safety, '/vedrus/safety', 1)
-        self.publisher_keepalive = self.create_publisher(KeepAlive, '/vedrus/keepalive/safety', 1)
+        self.create_subscription(Image, '/vedrus/camera/front/depth/image_rect_raw',
+                               self.depth_camera_callback, 10)
+        self.create_subscription(Sonar, '/vedrus/sonar', self.sonar_callback, 10)
+        self.create_subscription(Yolov8Inference, '/yolov8/inference', self.yolo_callback, 10)
+
+        self.publisher_safety = self.create_publisher(Safety, '/vedrus/safety', 10)
+        self.publisher_keepalive = self.create_publisher(KeepAlive, '/vedrus/keepalive/safety', 10)
         self.create_timer(0.33333333, self.timer_keepalive)
-        self.create_subscription(KeepAlive, '/vedrus/keepalive/controller', 
-                               self.controller_keepalive_callback, 1)
-        
+        self.create_subscription(KeepAlive, '/vedrus/keepalive/controller',
+                               self.controller_keepalive_callback, 10)
+
         if 'DEPTH_PUBLISH_TOPIC' in globals():
             self.publisher_depth = self.create_publisher(Image, DEPTH_PUBLISH_TOPIC, 1)
 
@@ -144,6 +145,7 @@ class SafetyNode(Node):
 
     def sonar_callback(self, data):
         self.keepaliveSonar = time.time()
+
         if 0. < data.range < 100.:
             msg = Safety()
             msg.header.frame_id = 'sonar'
@@ -156,6 +158,7 @@ class SafetyNode(Node):
 
     def depth_camera_callback(self, data):
         self.keepaliveDepth = time.time()
+
         # Downrate from 30 to 5 fps
         self.depth_count += 1
         if self.depth_count % 6 != 0:
