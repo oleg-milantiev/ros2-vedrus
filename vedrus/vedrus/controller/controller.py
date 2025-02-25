@@ -126,14 +126,16 @@ class VedrusControlerNode(Node):
             self.mode.out = ModeMoveFixed(self)
             self.mode.out.incLeft = 20000
             self.mode.out.incRight = 20000
+            self.mode.out.taskStage = 1
 
         # зациклить роутинг +20к, -20к, +, -, ...
         if isinstance(self.mode, ModeMoveFixed) and self.mode.out == None:
             if DEBUG:
                 self.get_logger().info(f"VedrusControlerNode: task_safety_short_forward_reverse: Set next mode: ModeMoveFixed: {-self.mode.incLeft}")
             self.mode.out = ModeMoveFixed(self)
-            self.mode.out.incLeft = -self.mode.incLeft
-            self.mode.out.incRight = -self.mode.incRight
+            self.mode.out.taskStage = -self.mode.taskStage
+            self.mode.out.incLeft = -self.mode.taskStage * 20000
+            self.mode.out.incRight = -self.mode.taskStage * 20000
 
         # выполню цикл режима. И тот решит какой режим следующий
         self.mode = self.mode.cycle()

@@ -75,7 +75,6 @@ class ModeMoveFixed(ModeParent):
                     self.node.get_logger().info('ModeMoveFixed: end of mode')
                 return self.out
 
-
         # случайная одиночная тревога за 0.5с. Игнорю
         if self.alarmCount == 1 and time.time() - self.lastAlarmTime >= 0.5:
             if DEBUG:
