@@ -25,7 +25,12 @@ class VedrusControlerNode(Node):
     publisherMotor = None
 
     # время последнего keepalive Safety
-    keepalive = None
+    keepaliveSafety = None
+
+    # время последнего keepalive для моторов и bearing
+    keepaliveMotorLeft = None
+    keepaliveMotorRight = None
+    keepaliveBearing = None
 
     leftSpeed = None
     def left(self, speed):
@@ -89,6 +94,7 @@ class VedrusControlerNode(Node):
     bearing = None
     def bearing_callback(self, msg):
         self.bearing = msg.data
+        self.keepaliveBearing = time.time()
 
 
     motorLeft = None
@@ -96,8 +102,10 @@ class VedrusControlerNode(Node):
     def motors_callback(self, msg):
         if msg.header.frame_id == 'left':
             self.motorLeft = msg
+            self.keepaliveMotorLeft = time.time()
         else:
             self.motorRight = msg
+            self.keepaliveMotorRight = time.time()
 
 
     # safety
@@ -110,15 +118,21 @@ class VedrusControlerNode(Node):
                 self.mode.alarm(msg)
 
 
-    # task
+    def __canWork(self):
+        current_time = time.time()
+        return (self.keepaliveSafety is not None and current_time - self.keepaliveSafety < 2 and
+                self.keepaliveMotorLeft is not None and current_time - self.keepaliveMotorLeft < 2 and
+                self.keepaliveMotorRight is not None and current_time - self.keepaliveMotorRight < 2 and
+                self.keepaliveBearing is not None and current_time - self.keepaliveBearing < 2)
+
+    # tasks
     def task_safety_short_forward_reverse(self):
-        # Жду запуска Safety
-        if self.keepalive is None:
+        if not self.__canWork():
             if DEBUG:
-                self.get_logger().info('VedrusControlerNode: task_safety_short_forward_reverse: waiting for Safety')
+                self.get_logger().info('VedrusControlerNode: task_safety_short_forward_reverse: waiting for all keepalives')
             return
 
-        # начальный режим и его параметры (здесь: роутинг)
+        # initial mode and its parameters (here: routing)
         if self.mode is None:
             if DEBUG:
                 self.get_logger().info('VedrusControlerNode: task_safety_short_forward_reverse: Go to ModeSafetyStop. Will route to ModeMoveFixed +20k')
@@ -128,7 +142,7 @@ class VedrusControlerNode(Node):
             self.mode.out.incRight = 20000
             self.mode.out.taskStage = 1
 
-        # зациклить роутинг +20к, -20к, +, -, ...
+        # loop routing +20k, -20k, +, -, ...
         if isinstance(self.mode, ModeMoveFixed) and self.mode.out == None:
             if DEBUG:
                 self.get_logger().info(f"VedrusControlerNode: task_safety_short_forward_reverse: Set next mode: ModeMoveFixed: {-self.mode.incLeft}")
@@ -137,91 +151,97 @@ class VedrusControlerNode(Node):
             self.mode.out.incLeft = -self.mode.taskStage * 20000
             self.mode.out.incRight = -self.mode.taskStage * 20000
 
-        # выполню цикл режима. И тот решит какой режим следующий
+        # Execute the mode cycle. The mode will decide the next mode
         self.mode = self.mode.cycle()
 
     def task_safety_forward(self):
-        # Жду запуска Safety
-        if self.keepalive is None:
+        if not self.__canWork():
             if DEBUG:
-                self.get_logger().info('VedrusControlerNode: waiting for Safety')
+                self.get_logger().info('VedrusControlerNode: waiting for all keepalives')
             return
 
-        # начальный режим и его параметры (здесь: роутинг)
+        # initial mode and its parameters (here: routing)
         if self.mode is None:
             self.mode = ModeSafetyStop(self)
             self.mode.out = ModeForwardSlow(self)
 
-        # выполню цикл режима. И тот решит какой режим следующий
+        # Execute the mode cycle. The mode will decide the next mode
         self.mode = self.mode.cycle()
 
     def task_stay_and_rotate_to_person(self):
-        # Жду запуска Safety
-        if self.keepalive is None:
+        if not self.__canWork():
             if DEBUG:
-                self.get_logger().info('VedrusControlerNode: waiting for Safety')
+                self.get_logger().info('VedrusControlerNode: waiting for all keepalives')
             return
 
-        # начальный режим и его параметры (здесь: роутинг)
+        # initial mode and its parameters (here: routing)
         if self.mode is None:
             self.mode = ModeSafetyStop(self)
             self.mode.out = ModeRotateToPerson(self)
             self.mode.out.forward = False
 
-        # выполню цикл режима. И тот решит какой режим следующий
+        # Execute the mode cycle. The mode will decide the next mode
         self.mode = self.mode.cycle()
 
     def task_find_person_rotate_and_follow(self):
-        # Жду запуска Safety
-        if self.keepalive is None:
+        if not self.__canWork():
             if DEBUG:
-                self.get_logger().info('VedrusControlerNode: waiting for Safety')
+                self.get_logger().info('VedrusControlerNode: waiting for all keepalives')
             return
 
-        # начальный режим и его параметры (здесь: роутинг)
+        # initial mode and its parameters (here: routing)
         if self.mode is None:
             self.mode = ModeSafetyStop(self)
             self.mode.out = ModeRotateToPerson(self)
             self.mode.out.forward = True
 
-        # выполню цикл режима. И тот решит какой режим следующий
+        # Execute the mode cycle. The mode will decide the next mode
         self.mode = self.mode.cycle()
 
 
     # keepalive
     def safety_keepalive_callback(self, data):
-        self.keepalive = time.time()
+        self.keepaliveSafety = time.time()
+
+    def _handle_crash(self):
+        self.crash = True
+
+        for frame_id in ['left', 'right']:
+            msg = MotorCommand()
+            msg.header.stamp = self.get_clock().now().to_msg()
+            msg.header.frame_id = frame_id
+            msg.speed = 0
+            msg.crash = True
+            self.publisherMotor.publish(msg)
 
     def timer_keepalive(self):
         if self.crash:
             return
 
-        # отправлю свой keepalive
+        # Send my keepalive
         msg = KeepAlive()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = 'controller'
         self.publisher_keepalive.publish(msg)
 
-        # Жду запуска Safety
-        if self.keepalive is None:
-            return
-
-        # проверю safety keepalive
-        if time.time() - self.keepalive >= 2:
-            self.crash = True
-
+        # Check all keepalive properties
+        current_time = time.time()
+        if self.keepaliveSafety is not None and current_time - self.keepaliveSafety >= 2:
             self.get_logger().info('Got safety keepalive timeout!')
-
-            msg = MotorCommand()
-            msg.header.stamp = self.get_clock().now().to_msg()
-            msg.header.frame_id = 'left'
-            msg.speed = 0
-            msg.crash = True
-
-            self.publisherMotor.publish(msg)
-
-            msg.header.frame_id = 'right'
-            self.publisherMotor.publish(msg)
+            self._handle_crash()
+            return
+        if self.keepaliveMotorLeft is not None and current_time - self.keepaliveMotorLeft >= 2:
+            self.get_logger().info('Got left motor keepalive timeout!')
+            self._handle_crash()
+            return
+        if self.keepaliveMotorRight is not None and current_time - self.keepaliveMotorRight >= 2:
+            self.get_logger().info('Got right motor keepalive timeout!')
+            self._handle_crash()
+            return
+        if self.keepaliveBearing is not None and current_time - self.keepaliveBearing >= 2:
+            self.get_logger().info('Got bearing keepalive timeout!')
+            self._handle_crash()
+            return
             
 def main(args=None):
     global node
