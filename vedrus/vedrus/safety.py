@@ -74,6 +74,8 @@ class SafetyNode(Node):
         super().__init__('safety_node')
         self.crash = False
         self.depth_count = 0
+        # 10 sec keepalive start gap
+        self.keepaliveSonar = self.keepaliveDepth = self.keepaliveController = time.time() + 10
         
         self.create_subscription(Image, '/vedrus/camera/front/depth/image_rect_raw', 
                                self.depth_camera_callback, 1) 
@@ -86,15 +88,13 @@ class SafetyNode(Node):
         self.create_subscription(KeepAlive, '/vedrus/keepalive/controller', 
                                self.controller_keepalive_callback, 1)
         
-        self.keepalive = time.time() + 10  # 10 sec keepalive start gap
-        
         if 'DEPTH_PUBLISH_TOPIC' in globals():
             self.publisher_depth = self.create_publisher(Image, DEPTH_PUBLISH_TOPIC, 1)
 
         self.get_logger().info('Start Safety')
 
     def controller_keepalive_callback(self, data):
-        self.keepalive = time.time()
+        self.keepaliveController = time.time()
 
     def timer_keepalive(self):
         if self.crash:
@@ -105,19 +105,28 @@ class SafetyNode(Node):
         msg.header.frame_id = 'safety'
         self.publisher_keepalive.publish(msg)
 
-        if time.time() - self.keepalive >= 2:
-            self.crash = True
-            self.get_logger().info('Got controller keepalive timeout!')
-            
-            msg = MotorCommand()
-            msg.header.stamp = self.get_clock().now().to_msg()
-            msg.speed = 0
-            msg.crash = True
-            
-            publisher = self.create_publisher(MotorCommand, '/vedrus/motor/command', 1)
-            for side in ['left', 'right']:
-                msg.header.frame_id = side
-                publisher.publish(msg)
+        if time.time() - self.keepaliveController >= 2:
+            self.__trigger_crash('controller keepalive timeout')
+
+        if time.time() - self.keepaliveSonar >= 2:
+            self.__trigger_crash('sonar keepalive timeout')
+
+        if time.time() - self.keepaliveDepth >= 2:
+            self.__trigger_crash('depth camera keepalive timeout')
+
+    def __trigger_crash(self, reason):
+        self.crash = True
+        self.get_logger().info(f'Got {reason}!')
+
+        msg = MotorCommand()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.speed = 0
+        msg.crash = True
+
+        publisher = self.create_publisher(MotorCommand, '/vedrus/motor/command', 1)
+        for side in ['left', 'right']:
+            msg.header.frame_id = side
+            publisher.publish(msg)
 
     def yolo_callback(self, data):
         for inference in data.yolov8_inference:
@@ -134,6 +143,7 @@ class SafetyNode(Node):
                 self.publisher_safety.publish(msg)
 
     def sonar_callback(self, data):
+        self.keepaliveSonar = time.time()
         if 0. < data.range < 100.:
             msg = Safety()
             msg.header.frame_id = 'sonar'
@@ -145,13 +155,12 @@ class SafetyNode(Node):
             self.publisher_safety.publish(msg)
 
     def depth_camera_callback(self, data):
+        self.keepaliveDepth = time.time()
         # Downrate from 30 to 5 fps
         self.depth_count += 1
         if self.depth_count % 6 != 0:
             return  
 
-        start_time = time.time()
-        
         # Convert ROS Image 848x480x30 into OpenCV image 212x120x5
         #depth_image = np.clip((bridge.imgmsg_to_cv2(data, desired_encoding='passthrough')[::4, ::4] >> 2), 0, 255).astype(np.uint8)
         depth_image = np.clip(cv2.resize(
