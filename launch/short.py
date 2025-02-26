@@ -57,10 +57,11 @@ def generate_launch_description():
             name='sonar',
             output='screen',
             parameters=[
-                {'pin_numbers': [127, 125, 124, 144, 122, 120, 123, 121]},
+                {'pins_trig': [127, 125, 124, 144]},
+                {'pins_echo': [122, 120, 123, 121]},
                 {'topic_name': '/vedrus/sonar'},
-                {'names': ['right', 'left', 'rear-right', 'rear-left']}, # TODO Check which sonar is where
-                {'azimuths': [90.0, 270.0, 160.0, 200.0]},               # TODO same
+                {'names': ['left', 'right', 'rear-right', 'rear-left']},
+                {'azimuths': [270.0, 200.0, 90.0, 160.0]},
             ]
         ),
         Node(
