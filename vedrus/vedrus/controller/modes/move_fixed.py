@@ -35,7 +35,7 @@ class ModeMoveFixed(ModeParent):
         self.alarmCount += 1
 
         if DEBUG:
-            self.node.get_logger().info('ModeMoveFixed: got alarm count='+ str(self.alarmCount))
+            self.node.get_logger().info(f"ModeMoveFixed: got alarm count={self.alarmCount} by {msg.header.frame_id}, range={msg.range}m, azimuth={msg.azimuth}°")
         return
 
     def cycle(self):
