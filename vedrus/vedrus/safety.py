@@ -150,8 +150,8 @@ class SafetyNode(Node):
             msg = Safety()
             msg.header.frame_id = 'sonar'
             msg.header.stamp = self.get_clock().now().to_msg()
-            msg.alarm = data.range < 50.
-            msg.warning = 50. <= data.range < 100.
+            msg.alarm = data.range < 0.5
+            msg.warning = 0.5 <= data.range < 1.
             msg.range = data.range
             msg.azimuth = data.azimuth
             self.publisher_safety.publish(msg)
