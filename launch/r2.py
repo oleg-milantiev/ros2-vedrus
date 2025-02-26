@@ -141,8 +141,10 @@ def generate_launch_description():
                 {'enable_accel': False},
                 {'enable_gyro': False},
                 {'hole_filling_filter.enable': True},
-                {'depth_module.profile': '848x480x15'},
-                {'rgb_camera.profile': '640x480x15'},
+#                {'depth_module.profile': '424x240x6'}, # I need it! But realsense node just ignoring it
+                {'depth_module.profile': '848x480x30'}, # Will downscale and downrate it in the safety node
+                {'rgb_camera.profile': '640x480x30'},   # Will downrate in yolo node
+                {'verbose_logging': True},
                 {'enable_auto_exposure': True},
             ]
         ),
@@ -262,8 +264,13 @@ def generate_launch_description():
             name='sonar',
             output='screen',
             parameters=[
-                {'pin_numbers': [127, 125, 124, 144, 122, 120, 123, 121]},
+                {'pins_trig': [127, 125, 124, 144]},
+                {'pins_echo': [122, 120, 123, 121]},
+#                 {'pins_trig': [127]},
+#                 {'pins_echo': [122]},
                 {'topic_name': '/vedrus/sonar'},
+                {'names': ['left', 'left-rear', 'right', 'right-rear']},
+                {'azimuths': [270.0, 200.0, 90.0, 160.0]},
             ]
         ),
         Node(
@@ -287,7 +294,6 @@ def generate_launch_description():
         ),
 
     ])
-
 
 
 '''

@@ -59,11 +59,14 @@ def generate_launch_description():
             parameters=[
                 {'pins_trig': [127, 125, 124, 144]},
                 {'pins_echo': [122, 120, 123, 121]},
+#                 {'pins_trig': [127]},
+#                 {'pins_echo': [122]},
                 {'topic_name': '/vedrus/sonar'},
-                {'names': ['left', 'right', 'rear-right', 'rear-left']},
+                {'names': ['left', 'left-rear', 'right', 'right-rear']},
                 {'azimuths': [270.0, 200.0, 90.0, 160.0]},
             ]
         ),
+
         Node(
             package='vedrus',
             executable='qmc5883l',
