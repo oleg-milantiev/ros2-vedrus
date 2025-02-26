@@ -6,17 +6,14 @@ DEBUG = True
 # Режим "Останов перед препятствием"
 class ModeSafetyStop(ModeParent):
 
+    started = None
+
     # поймал safety.warning
     def warning(self, msg):
         pass
 
     # поймал safety.alarm
     def alarm(self, msg):
-        # RGBD камера на солнце шумит (доделать safety фильтрацию last / preLast)
-        # пока что игнорирую алармы от RGBD
-        #if msg.header.frame_id == 'rgbd':
-        #	return
-
         if DEBUG:
             self.node.get_logger().info(f"ModeSafetyStop: got alarm by {msg.header.frame_id}, range={msg.range}m, azimuth={msg.azimuth}°")
 
@@ -26,6 +23,11 @@ class ModeSafetyStop(ModeParent):
     def cycle(self):
         self._statusInit()
         self._statusAppend('mode', 'SafetyStop')
+
+        if self.started == None:
+            self.started = True
+            self.node.left(0)
+            self.node.right(0)
 
         # выход из стопа в self.out после 2 секунд без safety::alarm
         if time.time() - self.lastAlarmTime > 2:

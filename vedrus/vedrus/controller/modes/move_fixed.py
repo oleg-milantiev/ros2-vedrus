@@ -22,8 +22,8 @@ class ModeMoveFixed(ModeParent):
     incLeft = 0
     incRight = 0
 
-    speedLeft = 500
-    speedRight = 500
+    speedLeft = 1000
+    speedRight = 1000
 
     # поймал safety.warning
     def warning(self, msg):

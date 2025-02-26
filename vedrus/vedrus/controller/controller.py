@@ -35,7 +35,7 @@ class VedrusControlerNode(Node):
     leftSpeed = None
     def left(self, speed):
         #if DEBUG:
-        #	self.get_logger().info('VedrusControlerNode::left: set speed to '+ str(speed))
+        #    self.get_logger().info('VedrusControlerNode::left: set speed to '+ str(speed))
 
         msg = MotorCommand()
         msg.header.stamp = self.get_clock().now().to_msg()
@@ -50,7 +50,7 @@ class VedrusControlerNode(Node):
     rightSpeed = None
     def right(self, speed):
         #if DEBUG:
-        #	self.get_logger().info('VedrusControlerNode::right: set speed to '+ str(speed))
+        #    self.get_logger().info('VedrusControlerNode::right: set speed to '+ str(speed))
 
         msg = MotorCommand()
         msg.header.stamp = self.get_clock().now().to_msg()
@@ -120,7 +120,7 @@ class VedrusControlerNode(Node):
 
     def __canWork(self):
         current_time = time.time()
-        
+
         # self.get_logger().info(f'keepaliveSafety: {self.keepaliveSafety}')
         # self.get_logger().info(f'keepaliveMotorLeft: {self.keepaliveMotorLeft}')
         # self.get_logger().info(f'keepaliveMotorRight: {self.keepaliveMotorRight}')
@@ -141,11 +141,11 @@ class VedrusControlerNode(Node):
         # initial mode and its parameters (here: routing)
         if self.mode is None:
             if DEBUG:
-                self.get_logger().info('VedrusControlerNode: task_safety_short_forward_reverse: Go to ModeSafetyStop. Will route to ModeMoveFixed +20k')
+                self.get_logger().info('VedrusControlerNode: task_safety_short_forward_reverse: Go to ModeSafetyStop. Will route to ModeMoveFixed +10k')
             self.mode = ModeSafetyStop(self)
             self.mode.out = ModeMoveFixed(self)
-            self.mode.out.incLeft = 20000
-            self.mode.out.incRight = 20000
+            self.mode.out.incLeft = 10000
+            self.mode.out.incRight = 10000
             self.mode.out.taskStage = 1
 
         # loop routing +20k, -20k, +, -, ...
@@ -154,8 +154,8 @@ class VedrusControlerNode(Node):
                 self.get_logger().info(f"VedrusControlerNode: task_safety_short_forward_reverse: Set next mode: ModeMoveFixed: {-self.mode.incLeft}")
             self.mode.out = ModeMoveFixed(self)
             self.mode.out.taskStage = -self.mode.taskStage
-            self.mode.out.incLeft = -self.mode.taskStage * 20000
-            self.mode.out.incRight = -self.mode.taskStage * 20000
+            self.mode.out.incLeft = -self.mode.taskStage * 10000
+            self.mode.out.incRight = -self.mode.taskStage * 10000
 
         # Execute the mode cycle. The mode will decide the next mode
         self.mode = self.mode.cycle()
