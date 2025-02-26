@@ -202,7 +202,7 @@ class SafetyNode(Node):
                     msg.header.stamp = stamp
                     msg.alarm = True
                     msg.warning = False
-                    msg.range = 50.
+                    msg.range = 0.5
                     msg.azimuth = self.__az360((cx * 2.0 / 212 - 1.0) * CAMERA_FOV['front'] / 2.0)
                     self.publisher_safety.publish(msg)
 
