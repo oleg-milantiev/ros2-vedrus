@@ -24,6 +24,7 @@ setup(
 			'bluepill = vedrus.bluepill:main',
 #			'gyro = vedrus.gyro:main',
 #			'test = vedrus.test:main',
+			'circle = vedrus.circle:main',
 			'controller = vedrus.controller.controller:main',
 			'keyboard = vedrus.keyboard:main',
 			'screen = vedrus.screen:main',

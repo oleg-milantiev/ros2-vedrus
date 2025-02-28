@@ -148,7 +148,7 @@ class VedrusControlerNode(Node):
             self.mode.out.incRight = 10000
             self.mode.out.taskStage = 1
 
-        # loop routing +20k, -20k, +, -, ...
+        # loop routing +10k, -10k, +, -, ...
         if isinstance(self.mode, ModeMoveFixed) and self.mode.out == None:
             if DEBUG:
                 self.get_logger().info(f"VedrusControlerNode: task_safety_short_forward_reverse: Set next mode: ModeMoveFixed: {-self.mode.incLeft}")
@@ -209,8 +209,9 @@ class VedrusControlerNode(Node):
     def safety_keepalive_callback(self, data):
         self.keepaliveSafety = time.time()
 
-    def _handle_crash(self):
+    def _handle_crash(self, reason):
         self.crash = True
+        self.get_logger().info(reason)
 
         for frame_id in ['left', 'right']:
             msg = MotorCommand()
@@ -233,20 +234,16 @@ class VedrusControlerNode(Node):
         # Check all keepalive properties
         current_time = time.time()
         if self.keepaliveSafety is not None and current_time - self.keepaliveSafety >= 2:
-            self.get_logger().info('Got safety keepalive timeout!')
-            self._handle_crash()
+            self._handle_crash('Got safety keepalive timeout!')
             return
         if self.keepaliveMotorLeft is not None and current_time - self.keepaliveMotorLeft >= 2:
-            self.get_logger().info('Got left motor keepalive timeout!')
-            self._handle_crash()
+            self._handle_crash('Got left motor keepalive timeout!')
             return
         if self.keepaliveMotorRight is not None and current_time - self.keepaliveMotorRight >= 2:
-            self.get_logger().info('Got right motor keepalive timeout!')
-            self._handle_crash()
+            self._handle_crash('Got right motor keepalive timeout!')
             return
         if self.keepaliveBearing is not None and current_time - self.keepaliveBearing >= 2:
-            self.get_logger().info('Got bearing keepalive timeout!')
-            self._handle_crash()
+            self._handle_crash('Got bearing keepalive timeout!')
             return
             
 def main(args=None):
