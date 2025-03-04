@@ -97,7 +97,7 @@ def generate_launch_description():
                 {'gamma': 0},
                 {'gain': 10},
                 {'brightness': 0},
-                {'contrast': 20},
+                {'contrast': 40},
                 {'publish_compressed': False}
             ]
         ),
@@ -119,7 +119,7 @@ def generate_launch_description():
                 {'gamma': 0},
                 {'gain': 10},
                 {'brightness': 0},
-                {'contrast': 20},
+                {'contrast': 40},
                 {'publish_compressed': False}
             ]
         ),
@@ -141,11 +141,11 @@ def generate_launch_description():
                 {'gamma': 0},
                 {'gain': 10},
                 {'brightness': 0},
-                {'contrast': 20},
+                {'contrast': 40},
                 {'publish_compressed': False}
             ]
         ),
-        
+
 
     ])
 
