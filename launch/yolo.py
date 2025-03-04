@@ -97,7 +97,7 @@ def generate_launch_description():
                 {'gamma': 0},
                 {'gain': 10},
                 {'brightness': 0},
-                {'contrast': 40},
+                {'contrast': 20},
                 {'publish_compressed': False}
             ]
         ),
@@ -119,7 +119,7 @@ def generate_launch_description():
                 {'gamma': 0},
                 {'gain': 10},
                 {'brightness': 0},
-                {'contrast': 40},
+                {'contrast': 20},
                 {'publish_compressed': False}
             ]
         ),
@@ -141,15 +141,54 @@ def generate_launch_description():
                 {'gamma': 0},
                 {'gain': 10},
                 {'brightness': 0},
-                {'contrast': 40},
+                {'contrast': 20},
                 {'publish_compressed': False}
             ]
         ),
 
+        Node(
+            package='vedrus',
+            executable='circle',
+            output='screen',
+            emulate_tty=True,
+            parameters=[
+#                {'camera_raw_topics': ('/vedrus/camera/front/color/image_raw', '/vedrus/camera/rear/image_raw', '/vedrus/camera/left/image_raw', '/vedrus/camera/right/image_raw')},
+                {'camera_raw_topics': ['/vedrus/camera/left/image_raw']},
+            ]
+        ),
+
+        Node(
+            package='vedrus',
+            executable='bluepill',
+            name='bluepill_left',
+            parameters=[
+                {'name': 'left'},
+                {'port': '/dev/ttyS2'},
+                {'P': 0.001},
+                {'I': 0.008},
+                {'D': 0.0}
+            ]
+        ),
+        Node(
+            package='vedrus',
+            executable='bluepill',
+            name='bluepill_right',
+            parameters=[
+                {'name': 'right'},
+                {'port': '/dev/ttyS3'},
+                {'P': 0.001},
+                {'I': 0.008},
+                {'D': 0.0},
+                {'reverse': True}
+            ]
+        ),
 
     ])
 
 '''
+find expo again
+v4l2-ctl -d /dev/video6 -c exposure_auto=3 -c exposure_auto_priority=1 -c backlight_compensation=2 -c brightness=0 -c gamma=0 -c gain=10 -c contrast=20
+
         Node(
             package='vedrus',
             executable='circle',
