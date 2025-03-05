@@ -37,7 +37,7 @@
 const bool IS_LEFT_SIDE = true;  // Set to false for right side
 const char* SIDE_NAME = IS_LEFT_SIDE ? "VEDL" : "VEDR";
 const int TICKS_WHEEL = 16384;    // Encoder ticks per wheel revolution
-int MAX_PWM = 20;          // Maximum PWM value for motor control
+int MAX_PWM = 20;          // Initial maximum PWM value for motor control
 
 // Pin definitions
 const int LED_PIN = PC13;   // Internal LED pin
@@ -56,8 +56,8 @@ double motorPower = 0;      // PWM output (-MAX_PWM to MAX_PWM)
 HardwareTimer *EncoderTimer = new HardwareTimer(TIM3);
 
 // PID parameters
-double Kp = 0.01;
-double Ki = 0.03;
+double Kp = 0.001;
+double Ki = 0.008;
 double Kd = 0.0;
 
 // Create PID instance
@@ -173,6 +173,7 @@ void calculateSpeed() {
 }
 
 uint8_t hangCount = 0;
+uint8_t zeroCount = 0;
 
 void updateMotor() {
   // Update PID and apply to motor
@@ -183,21 +184,28 @@ void updateMotor() {
   
   /**
    ** Try to prevent controller hangup
-   0..0..0..0..0.. have power and speed, all correct
+   [hang,zero]
+   [0,0]..[0,0]..[0,0].. have power and speed, all correct
    no speed, but have power
-   count cycles in hangCount: 1..2..3..4..5..6..7..8..9..10
-   11. Condition hangCount > 10 is true. Cure power reset to zero
-   12.. still no speed, but have power. Continue cure set power to zero. Prevent hangCount overflow by set it to 11
-   12.. same
-   12.. same (few cycles)
-   11.. we got a speed! Go back to normal mode (as currentSpeed != 0)
-   0. normal mode
-   0. normal mode...
+   count cycles in hangCount: [1,0]..[2,0]..3..4..5..6..7..8..9..[10,0]
+   [11,0]. Condition hangCount > 10 is true. Cure power reset to zero
+   [12,1].. still no speed, but have power. Continue cure set power to zero. Prevent hangCount overflow by set it to 11
+   [12,2].. same
+   ..
+   [12,6].. same (few cycles)
+   zeroCount > 5, so must go back to normal check
+   [0,0]
   **/
   if ((abs(motorPower) > 0.5) && currentSpeed == 0) {
     if (++hangCount > 10) {
       analogWrite(MOTOR_PWM, 0);
       hangCount = 11; // overflow protection
+      if (++zeroCount > 5) {
+        // we can hold zero pwm only 5 cycles
+        zeroCount = 0;
+        hangCount = 0;
+        analogWrite(MOTOR_PWM, abs(motorPower));
+      }
     }
   }
   else {
