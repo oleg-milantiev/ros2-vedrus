@@ -50,10 +50,10 @@ This is a testing utility and should be used with caution.
 Consider implementing additional safety features for production use.
 """
 
-import rclpy
+import rclpy # type: ignore
 import getch
-from rclpy.node import Node
-from std_msgs.msg import Header
+from rclpy.node import Node # type: ignore
+from std_msgs.msg import Header # type: ignore
 from vedrus_interfaces.msg import MotorCommand
 
 class VedrusTestNode(Node):
