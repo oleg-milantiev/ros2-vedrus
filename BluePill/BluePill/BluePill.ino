@@ -65,7 +65,7 @@ PID motorPID(&currentSpeed, &motorPower, &targetSpeed, Kp, Ki, Kd, DIRECT);
 
 // Timing variables
 unsigned long lastSpeedCalc = 0;
-const unsigned long SPEED_CALC_INTERVAL = 5; // 50ms interval for speed calculation
+const unsigned long SPEED_CALC_INTERVAL = 5; // 5ms interval for speed calculation
 int32_t lastPosition = 0;
 
 // Encoder overflow tracking
@@ -149,12 +149,12 @@ void loop() {
   // Process any incoming serial commands
   processSerialCommands();
   
-  // Calculate current speed
+  // Calculate current speed at 200 Hz (every 5ms)
   if (millis() - lastSpeedCalc >= SPEED_CALC_INTERVAL) {
     calculateSpeed();
     updateMotor();
     brightLED();
-    if (sendStatusCount++ == 10) {
+    if (sendStatusCount++ == 20) { // Send status at 10 Hz
       sendStatus();
       sendStatusCount = 0;
     }
@@ -181,13 +181,28 @@ void updateMotor() {
   // Set direction and power based on calculated motor power
   digitalWrite(MOTOR_DIR, motorPower >= 0 ? HIGH : LOW);
   
-  // Try to prevent controller hangup
-  if ((abs(motorPower) > 0) && currentSpeed == 0 && ++hangCount > 10) {
-    analogWrite(MOTOR_PWM, 0);
-    hangCount = 0;
+  /**
+   ** Try to prevent controller hangup
+   0..0..0..0..0.. have power and speed, all correct
+   no speed, but have power
+   count cycles in hangCount: 1..2..3..4..5..6..7..8..9..10
+   11. Condition hangCount > 10 is true. Cure power reset to zero
+   12.. still no speed, but have power. Continue cure set power to zero. Prevent hangCount overflow by set it to 11
+   12.. same
+   12.. same (few cycles)
+   11.. we got a speed! Go back to normal mode (as currentSpeed != 0)
+   0. normal mode
+   0. normal mode...
+  **/
+  if ((abs(motorPower) > 0.5) && currentSpeed == 0) {
+    if (++hangCount > 10) {
+      analogWrite(MOTOR_PWM, 0);
+      hangCount = 11; // overflow protection
+    }
   }
   else {
     analogWrite(MOTOR_PWM, abs(motorPower));
+    hangCount = 0;
   }
 }
 
@@ -262,7 +277,7 @@ void sendStatus() {
   Serial.print(Ki, 3);
   Serial.print("/");
   Serial.print(Kd, 3);
-  Serial.print(",MAX_PWM:");
+  Serial.print(",MAX:");
   Serial.println(MAX_PWM);
 }
 
