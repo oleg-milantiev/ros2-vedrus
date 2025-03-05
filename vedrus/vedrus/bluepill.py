@@ -177,7 +177,7 @@ class BluePillNode(Node):
             msg.target = -float(data['TGT']) if self.reverse else float(data['TGT'])
             msg.power = float(data['PWR'])
             # TODO reflash bluepills to implement
-            # msg.max_power = int(data['MAX_PWM'])
+            # msg.max_power = int(data['MAX'])
             return msg
 
         except (ValueError, KeyError) as e:
