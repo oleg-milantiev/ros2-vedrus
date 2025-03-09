@@ -91,8 +91,9 @@ def generate_launch_description():
                 {'image_width': 800},
                 {'image_height': 600},
                 {'framerate': 5.0},
-                {'exposure_auto': 3},
-                {'exposure_auto_priority': 1},
+                {'exposure_auto': 0},
+                {'autoexposure': False},
+                {'exposure_auto_priority': 0},
                 {'backlight_compensation': 2},
                 {'gamma': 0},
                 {'gain': 10},
@@ -113,8 +114,9 @@ def generate_launch_description():
                 {'image_width': 800},
                 {'image_height': 600},
                 {'framerate': 5.0},
-                {'exposure_auto': 3},
-                {'exposure_auto_priority': 1},
+                {'exposure_auto': 0},
+                {'autoexposure': False},
+                {'exposure_auto_priority': 0},
                 {'backlight_compensation': 2},
                 {'gamma': 0},
                 {'gain': 10},
@@ -135,25 +137,15 @@ def generate_launch_description():
                 {'image_width': 800},
                 {'image_height': 600},
                 {'framerate': 5.0},
-                {'exposure_auto': 3},
-                {'exposure_auto_priority': 1},
+                {'exposure_auto': 0},
+                {'autoexposure': False},
+                {'exposure_auto_priority': 0},
                 {'backlight_compensation': 2},
                 {'gamma': 0},
                 {'gain': 10},
                 {'brightness': 0},
                 {'contrast': 20},
                 {'publish_compressed': False}
-            ]
-        ),
-
-        Node(
-            package='vedrus',
-            executable='circle',
-            output='screen',
-            emulate_tty=True,
-            parameters=[
-#                {'camera_raw_topics': ('/vedrus/camera/front/color/image_raw', '/vedrus/camera/rear/image_raw', '/vedrus/camera/left/image_raw', '/vedrus/camera/right/image_raw')},
-                {'camera_raw_topics': ['/vedrus/camera/left/image_raw']},
             ]
         ),
 
