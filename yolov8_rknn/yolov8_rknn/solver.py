@@ -1,7 +1,19 @@
 #!/usr/bin/env python3
 
+'''
+TODO:
+- слишком огромный файл. Выделить работу с YOLO в отдельный файл
+- rate и IMG_PUBLISH_TOPIC, и IMG_SAVE_PATH в параметры или конфиг
+- включение / выключение фич (типа save, publish, exposure и distort) через параметры
+  мне не нравится интеграция с моим роботом. Модуль становится не полезным для других
+- вынести работу с камерами в отдельный модуль
+'''
+
 import time
 import rclpy # type: ignore
+from rcl_interfaces.srv import SetParameters # type: ignore
+from rcl_interfaces.msg import Parameter, ParameterValue # type: ignore
+from rcl_interfaces.msg import ParameterType # type: ignore
 from rclpy.node import Node # type: ignore
 from cv_bridge import CvBridge # type: ignore
 from sensor_msgs.msg import Image # type: ignore
@@ -15,19 +27,20 @@ from datetime import datetime
 
 bridge = CvBridge()
 
-'''
-TODO:
-- проверка входных параметров, включая размер изображения
-- IMG_PUBLISH_TOPIC в необязательный параметр
-'''
-
 IMG_SAVE_PATH = '/mnt/emmc/IMG/'
 IMG_PUBLISH_TOPIC = '/yolov8/img_out'
-
 
 class YOLOv8_solver(Node):
 
     def __init__(self):
+        self.exposures = {}
+        self.exposureClients = {}
+        self.exposureRates = {}
+        self.exposureRatesInit = {}
+        self.saveNumber = {}
+        self.saveRates = {}
+        self.saveRatesInit = {}
+
         super().__init__('yolov8_rknn_solver')
 
         self.declare_parameters(
@@ -106,9 +119,6 @@ class YOLOv8_solver(Node):
                                   20, 20, 0, 0, cv2.BORDER_CONSTANT, value=[0, 0, 0]) 
 
     def init_save_numbers(self):
-        self.saveNumber = {}
-        self.saveRates = {}
-        self.saveRatesInit = {}
         for camera_name in os.listdir(IMG_SAVE_PATH):
             camera_path = os.path.join(IMG_SAVE_PATH, camera_name)
             if os.path.isdir(camera_path):
@@ -260,6 +270,59 @@ class YOLOv8_solver(Node):
         cv2.imwrite(os.path.join(save_path, filename), image, [cv2.IMWRITE_PNG_COMPRESSION, 0])
         self.saveNumber[camera] += 1
 
+    def correctExposure(self, img, name):
+        if name == 'front':
+            return
+        
+        if name not in self.exposureRates:
+            self.exposureRates[name] = 1
+        self.exposureRates[name] -= 1
+        if self.exposureRates[name] != 0:
+            return
+        if name not in self.exposureRatesInit:
+            self.exposureRatesInit[name] = 7
+        self.exposureRates[name] = self.exposureRatesInit[name]
+
+        gray_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        avg_gray = np.mean(gray_image)
+        
+        old_exposure = self.exposures.get(name, 100)
+        needed_exposure = np.clip(old_exposure * (90 / avg_gray), 1, 10000)
+
+        self.get_logger().info(f'{name}: Average gray value: {avg_gray}, Needed exposure: {needed_exposure}')
+
+        if abs(needed_exposure - old_exposure) / old_exposure > 0.05:
+            # Adjust the exposure of the camera
+            self.setExposure(name, int(needed_exposure))
+            self.exposures[name] = needed_exposure
+
+    def setExposure(self, name, exposure):
+        if name not in self.exposureClients:
+            self.exposureClients[name] = self.create_client(
+                SetParameters,
+                f"/vedrus/camera/{name}/{name}/set_parameters"
+            )
+
+            if not self.exposureClients[name].wait_for_service(timeout_sec=3.0):
+                self.get_logger().error("Parameter service not available!")
+                return
+
+        request = SetParameters.Request()
+        param = Parameter()
+        param.name = "exposure"
+        param.value = ParameterValue()
+        param.value.type = ParameterType.PARAMETER_INTEGER
+        param.value.integer_value = exposure
+        request.parameters.append(param)
+
+        future = self.exposureClients[name].call_async(request)
+
+        #rclpy.spin_until_future_complete(self, future)
+        #if future.result():
+        #    self.get_logger().info(f"Parameter updated: {future.result().results}")
+        #else:
+        #    self.get_logger().error("Failed to update parameter!")
+
     def camera_callback(self, data, camera, topic):
         start_time = time.time()
         self.rates[camera] -= 1
@@ -287,6 +350,8 @@ class YOLOv8_solver(Node):
             img = cv2.copyMakeBorder(img_resized, top, bottom, left, right, cv2.BORDER_CONSTANT, value=[0, 0, 0])
         else:
             img = self._correct_fisheye_distortion(img)
+
+        self.correctExposure(img, name)
 
         if 'IMG_SAVE_PATH' in globals():
             self.save_image(img, name)
