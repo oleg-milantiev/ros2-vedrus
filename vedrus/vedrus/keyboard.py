@@ -8,13 +8,20 @@ for manual control and testing of the robot's movement system.
 
 Keyboard Controls:
 ----------------
-Left Motor:
-- 'q': Increase speed (+500)
-- 'a': Decrease speed (-500)
+Speed Control:
+- '+': Increase speed (+500)
+- '-': Decrease speed (-500)
 
-Right Motor:
-- 'w': Increase speed (+500)
-- 's': Decrease speed (-500)
+Movement Directions:
+- '5': Stop robot
+- '4': Rotate left (left motor reverse, right motor forward)
+- '6': Rotate right (left motor forward, right motor reverse)
+- '8': Move forward (both motors forward)
+- '2': Move backward (both motors reverse)
+- '7': Move forward and left (left motor half speed, right motor full speed)
+- '9': Move forward and right (left motor full speed, right motor half speed)
+- '1': Move backward and left (left motor half speed, right motor full speed)
+- '3': Move backward and right (left motor full speed, right motor half speed)
 
 Motor Control:
 ------------
@@ -30,82 +37,110 @@ Published Topics:
 
 Dependencies:
 ------------
-- ROS2 Humble or newer
+- ROS2
 - getch package (pip install getch)
-- vedrus_interfaces package
-
-Start:
-ros2 run vedrus keyboard
-
-Usage:
------
-1. Start the node: ros2 run vedrus keyboard
-2. Use keys (q,a,w,s) to control motors
-3. Monitor terminal for speed level feedback
-4. Ctrl+C to exit
-
-Note:
-----
-This is a testing utility and should be used with caution.
-Consider implementing additional safety features for production use.
 """
 
-import rclpy # type: ignore
-import getch
-from rclpy.node import Node # type: ignore
-from std_msgs.msg import Header # type: ignore
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import Header
 from vedrus_interfaces.msg import MotorCommand
+import getch
 
-class VedrusTestNode(Node):
-
-    left_speed = 0
-    right_speed = 0
-
+class KeyboardController(Node):
     def __init__(self):
-        super().__init__('vedrus_test')
+        super().__init__('keyboard_controller')
+        self.publisher_left = self.create_publisher(MotorCommand, '/vedrus/motor/command', 10)
+        self.publisher_right = self.create_publisher(MotorCommand, '/vedrus/motor/command', 10)
+        self.speed = 0
+        self.lastKey = None
+        self.get_logger().info('Keyboard Controller Node has been started.')
+        self.print_keys_hint()
 
-        self.publisher = self.create_publisher(MotorCommand, '/vedrus/motor/command', 10)
+    def print_keys_hint(self):
+        keys_hint = """
+        Keyboard Controls:
+        ----------------
+        Speed Control:
+        - '+': Increase speed (+500)
+        - '-': Decrease speed (-500)
 
-        while (1):
-            was_left = self.left_speed
-            was_right = self.right_speed
+        Movement Directions:
+        - '5': Stop robot
+        - '4': Rotate left (left motor reverse, right motor forward)
+        - '6': Rotate right (left motor forward, right motor reverse)
+        - '8': Move forward (both motors forward)
+        - '2': Move backward (both motors reverse)
+        - '7': Move forward and left (left motor half speed, right motor full speed)
+        - '9': Move forward and right (left motor full speed, right motor half speed)
+        - '1': Move backward and left (left motor half speed, right motor full speed)
+        - '3': Move backward and right (left motor full speed, right motor half speed)
+        """
+        print(keys_hint)
 
-            match getch.getch():
-                case 'q':
-                    self.left_speed += 500
-                case 'a':
-                    self.left_speed -= 500
-                case 'w':
-                    self.right_speed += 500
-                case 's':
-                    self.right_speed -= 500
+    def publish_command(self, left_speed, right_speed):
+        left_msg = MotorCommand()
+        right_msg = MotorCommand()
+        left_msg.header = Header()
+        right_msg.header = Header()
+        now = self.get_clock().now().to_msg()
+        left_msg.header.stamp = now
+        right_msg.header.stamp = now
+        left_msg.header.frame_id = 'left'
+        right_msg.header.frame_id = 'right'
+        left_msg.speed = left_speed
+        right_msg.speed = right_speed
+        self.publisher_left.publish(left_msg)
+        self.publisher_right.publish(right_msg)
+        self.get_logger().info(f'Published {left_speed} / {right_speed}')
 
-            if was_left != self.left_speed:
-                msg = MotorCommand()
-                msg.header = Header()
-                msg.header.stamp = self.get_clock().now().to_msg()
-                msg.header.frame_id = 'left'
-                msg.speed = self.left_speed
-                print(f'Left Motor Speed: {self.left_speed}')
-                self.publisher.publish(msg)
+    def process_key(self, key):
+        if key == '5':
+            self.publish_command(0, 0)
+        elif key == '4':
+            self.publish_command(-self.speed, self.speed)
+        elif key == '6':
+            self.publish_command(self.speed, -self.speed)
+        elif key == '8':
+            self.publish_command(self.speed, self.speed)
+        elif key == '2':
+            self.publish_command(-self.speed, -self.speed)
+        elif key == '7':
+            self.publish_command(self.speed // 2, self.speed)
+        elif key == '9':
+            self.publish_command(self.speed, self.speed // 2)
+        elif key == '1':
+            self.publish_command(-self.speed // 2, -self.speed)
+        elif key == '3':
+            self.publish_command(-self.speed, -self.speed // 2)
 
-            if was_right != self.right_speed:
-                msg = MotorCommand()
-                msg.header = Header()
-                msg.header.stamp = self.get_clock().now().to_msg()
-                msg.header.frame_id = 'right'
-                msg.speed = self.right_speed
-                print(f'Right Motor Speed: {self.right_speed}')
-                self.publisher.publish(msg)
+    def run(self):
+        while rclpy.ok():
+            key = getch.getch()
+            if key == '+':
+                self.speed = min(self.speed + 500, 10000)
+                self.get_logger().info(f'Speed increased to: {self.speed}')
+                if self.lastKey:
+                    self.process_key(self.lastKey)
+            elif key == '-':
+                self.speed = max(self.speed - 500, 0)
+                self.get_logger().info(f'Speed decreased to: {self.speed}')
+                if self.lastKey:
+                    self.process_key(self.lastKey)
+            else:
+                self.lastKey = key
+                self.process_key(key)
 
 def main(args=None):
     rclpy.init(args=args)
-
-    vedrus_test_node = VedrusTestNode()
-    rclpy.spin(vedrus_test_node)
-
-    vedrus_test_node.destroy_node()
-    rclpy.shutdown()
+    node = KeyboardController()
+    try:
+        node.run()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
 
 if __name__ == '__main__':
     main()
