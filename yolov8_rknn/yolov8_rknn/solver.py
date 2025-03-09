@@ -6,11 +6,12 @@ from rclpy.node import Node # type: ignore
 from cv_bridge import CvBridge # type: ignore
 from sensor_msgs.msg import Image # type: ignore
 import numpy as np
-
 from rknnlite.api import RKNNLite
-
 from yolov8_interfaces.msg import InferenceResult, Yolov8Inference
+import os
+import glob
 import cv2
+from datetime import datetime
 
 bridge = CvBridge()
 
@@ -20,6 +21,7 @@ TODO:
 - IMG_PUBLISH_TOPIC в необязательный параметр
 '''
 
+IMG_SAVE_PATH = '/mnt/emmc/IMG/'
 IMG_PUBLISH_TOPIC = '/yolov8/img_out'
 
 
@@ -56,7 +58,7 @@ class YOLOv8_solver(Node):
             self.create_subscription(
                 Image,
                 topics[i],
-                lambda msg, i=i: self.camera_callback(msg, i),
+                lambda msg, i=i: self.camera_callback(msg, i, topics[i]),
                 10)
 
         self.yolov8_pub = self.create_publisher(Yolov8Inference, self.get_parameter('inference_topic').get_parameter_value().string_value, 1)
@@ -64,20 +66,63 @@ class YOLOv8_solver(Node):
         self.ratesInit = self.get_parameter('camera_rates').get_parameter_value().integer_array_value
         self.rates = self.ratesInit[:]
 
-        self.saveRatesInit = self.get_parameter('save_image_rates').get_parameter_value().integer_array_value
-        self.saveRates = self.saveRatesInit[:]
-
         self.rknn = RKNNLite()
         self.rknn.load_rknn(self.get_parameter('model').get_parameter_value().string_value)
         self.rknn.init_runtime()
+
+        self.init_fisheye_correction()
 
         # TBD вторую модель в необязательный параметр
         #self.rknn2 = RKNNLite()
         #self.rknn2.load_rknn('/opt/ros/iron/family.rknn')
         #self.rknn2.init_runtime()
 
+        if 'IMG_SAVE_PATH' in globals():
+            self.init_save_numbers()
+
         if 'IMG_PUBLISH_TOPIC' in globals():
             self.publisher_img = self.create_publisher(Image, IMG_PUBLISH_TOPIC, 10)
+
+    def init_fisheye_correction(self):
+        # 4.jpg
+        k1=-0.5402212953096065
+        k2=0.10362133512295424
+        k3=0.09528874965041999
+        k4=0.11721272885952241
+        k5=0.9381049520596112
+        k6=0.7916997424822741
+
+        h, w = 600, 800
+        K = np.array([[-w * k5, 0, w/2],
+                    [0, -h * k5, h/2],
+                    [0, 0, 1]], dtype=np.float32)
+        D = np.array([k1, k2, k3, k4], dtype=np.float32)
+        new_K = cv2.fisheye.estimateNewCameraMatrixForUndistortRectify(K, D, (w, h), np.eye(3), balance=k6)
+        self.map1, self.map2 = cv2.fisheye.initUndistortRectifyMap(K, D, np.eye(3), new_K, (w, h), cv2.CV_16SC2)
+
+    def _correct_fisheye_distortion(self, image):
+        undistorted_image = cv2.remap(image, self.map1, self.map2, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
+        return cv2.copyMakeBorder(undistorted_image[:, 80:720],
+                                  20, 20, 0, 0, cv2.BORDER_CONSTANT, value=[0, 0, 0]) 
+
+    def init_save_numbers(self):
+        self.saveNumber = {}
+        self.saveRates = {}
+        self.saveRatesInit = {}
+        for camera_name in os.listdir(IMG_SAVE_PATH):
+            camera_path = os.path.join(IMG_SAVE_PATH, camera_name)
+            if os.path.isdir(camera_path):
+                image_files = glob.glob(os.path.join(camera_path, '*png'))
+
+                if image_files:
+                    # Extract the number from the first image name
+                    image_files.sort(reverse=True)
+                    latest_image = image_files[0]
+                    latest_number = int(os.path.splitext(os.path.basename(latest_image))[0].split('-')[-1])
+                else:
+                    latest_number = 0
+
+                self.saveNumber[camera_name] = latest_number + 1
 
     def filter_boxes(self, boxes, box_confidences, box_class_probs):
         """Vectorized version of filter boxes"""
@@ -194,7 +239,28 @@ class YOLOv8_solver(Node):
                 np.concatenate(nclasses), 
                 np.concatenate(nscores))
 
-    def camera_callback(self, data, camera):
+    def save_image(self, image, camera):
+        if camera not in self.saveNumber:
+            self.saveNumber[camera] = 1
+
+        if camera not in self.saveRates:
+            self.saveRates[camera] = 1
+        self.saveRates[camera] -= 1
+        if self.saveRates[camera] != 0:
+            return
+        if camera not in self.saveRatesInit:
+            self.saveRatesInit[camera] = 5 # Save every 5th image 
+        self.saveRates[camera] = self.saveRatesInit[camera]
+
+        date_str = datetime.now().strftime('%Y-%m-%d')
+        image_number = f'{self.saveNumber[camera]:06d}'
+        filename = f'{date_str}-{camera}-{image_number}.png'
+        save_path = os.path.join(IMG_SAVE_PATH, camera)
+        os.makedirs(save_path, exist_ok=True)
+        cv2.imwrite(os.path.join(save_path, filename), image, [cv2.IMWRITE_PNG_COMPRESSION, 0])
+        self.saveNumber[camera] += 1
+
+    def camera_callback(self, data, camera, topic):
         start_time = time.time()
         self.rates[camera] -= 1
 
@@ -205,22 +271,34 @@ class YOLOv8_solver(Node):
 
         img = bridge.imgmsg_to_cv2(data, 'bgr8')
 
-        h, w = img.shape[:2]
-        if h < 640 or w < 640:
-            top = (640 - h) // 2
-            bottom = 640 - h - top
-            left = (640 - w) // 2
-            right = 640 - w - left
-            img = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=(0, 0, 0))
+        # /vedrus/camera/front/color/image_raw -> front
+        name = topic.split('/')[3]
 
+        # Process input image
+        if name == 'front':
+            h, w = img.shape[:2]
+            scale = min(640 / h, 640 / w)
+            nh, nw = int(h * scale), int(w * scale)
+            img_resized = cv2.resize(img, (nw, nh))
+            top = (640 - nh) // 2
+            bottom = 640 - nh - top
+            left = (640 - nw) // 2
+            right = 640 - nw - left
+            img = cv2.copyMakeBorder(img_resized, top, bottom, left, right, cv2.BORDER_CONSTANT, value=[0, 0, 0])
+        else:
+            img = self._correct_fisheye_distortion(img)
+
+        if 'IMG_SAVE_PATH' in globals():
+            self.save_image(img, name)
+
+        # Inference with RKNN
         results = self.rknn.inference(inputs=[img])
-
         boxes, classes, scores = self.post_process(results)
         
         # test set
-        # boxes = [[1, 2, 3, 4]]
-        # classes = [1]
-        # scores = [0.9]
+        #boxes = [[1, 2, 3, 4]]
+        #classes = [1]
+        #scores = [0.9]
 
         if boxes is not None:
             self.yolov8_inference.header.frame_id = self.cameras[camera]

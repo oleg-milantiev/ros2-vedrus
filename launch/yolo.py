@@ -73,8 +73,8 @@ def generate_launch_description():
                 {'enable_gyro': False},
                 {'hole_filling_filter.enable': True},
 #                {'depth_module.profile': '424x240x6'}, # I need it! But realsense node just ignoring it
-                {'depth_module.profile': '848x480x30'}, # Will downscale and downrate it in the safety node
-                {'rgb_camera.profile': '640x480x30'},   # Will downrate in yolo node
+                {'depth_module.profile': '848x480x6'},  # Will downscale and downrate it in the safety node
+                {'rgb_camera.profile': '1280x720x6'},   # Will downrate in yolo node
                 {'verbose_logging': True},
                 {'enable_auto_exposure': True},
             ]
@@ -183,6 +183,24 @@ def generate_launch_description():
             ]
         ),
 
+        Node(
+            package='yolov8_rknn',
+            executable='solver',
+            output='log',
+            emulate_tty=True,
+            parameters=[
+#				{'model': '/opt/ros/iron/family.rknn'},
+#				{'classes': ("alex", "bars", "dad", "fish", "ivan", "marta", "max", "mom", "oleg", "poly", "turtle", "yury")},
+                {'model': '/opt/ros/iron/yolov8n-1.5.2.rknn'},
+#                {'model': '/opt/ros/iron/yolo11n-rk3566.rknn'},
+                {'classes': ("person","bicycle","car","motorbike","airplane","bus","train","truck","boat","traffic light","fire hydrant","stop sign","parking meter","bench","bird","cat","dog","horse","sheep","cow","elephant","bear","zebra","giraffe","backpack","umbrella","handbag","tie","suitcase","frisbee","skis","snowboard","sports ball","kite","baseball bat","baseball glove","skateboard","surfboard","tennis racket","bottle","wine glass","cup","fork","knife","spoon","bowl","banana","apple","sandwich","orange","broccoli","carrot","hot dog","pizza","donut","cake","chair","sofa","pottedplant","bed","diningtable","toilet","tvmonitor","laptop","mouse","remote","keyboard","cell phone","microwave","oven","toaster","sink","refrigerator","book","clock","vase","scissors","teddy bear","hair drier","toothbrush")},
+                {'camera_ids': ('front', 'rear', 'left', 'right')}, # как звать камеры. Этот id уйдёт в header.frame_id
+                {'camera_rates': (5, 1, 1, 1)}, # обрабатывать каждый пятый кадр с первой и каждый кадр с остальных (5 раз в секунду с каждой)
+                {'camera_raw_topics': ('/vedrus/camera/front/color/image_raw', '/vedrus/camera/rear/image_raw', '/vedrus/camera/left/image_raw', '/vedrus/camera/right/image_raw')}, # откуда читать картинки
+                {'inference_topic': '/yolov8/inference'}, # куда кидать солвы
+            ]
+        ),
+
     ])
 
 '''
@@ -218,21 +236,4 @@ v4l2-ctl -d /dev/video10 -c exposure_auto=3 -c exposure_auto_priority=1 -c backl
 [usb_cam_node_exe-4]    mjpeg2rgb
 [usb_cam_node_exe-4]    m4202rgb
 
-        Node(
-            package='yolov8_rknn',
-            executable='solver',
-            output='log',
-            emulate_tty=True,
-            parameters=[
-#				{'model': '/opt/ros/iron/family.rknn'},
-#				{'classes': ("alex", "bars", "dad", "fish", "ivan", "marta", "max", "mom", "oleg", "poly", "turtle", "yury")},
-#                {'model': '/opt/ros/iron/yolov8n-1.5.2.rknn'},
-                {'model': '/opt/ros/iron/yolo11n-rk3566.rknn'},
-                {'classes': ("person","bicycle","car","motorbike","airplane","bus","train","truck","boat","traffic light","fire hydrant","stop sign","parking meter","bench","bird","cat","dog","horse","sheep","cow","elephant","bear","zebra","giraffe","backpack","umbrella","handbag","tie","suitcase","frisbee","skis","snowboard","sports ball","kite","baseball bat","baseball glove","skateboard","surfboard","tennis racket","bottle","wine glass","cup","fork","knife","spoon","bowl","banana","apple","sandwich","orange","broccoli","carrot","hot dog","pizza","donut","cake","chair","sofa","pottedplant","bed","diningtable","toilet","tvmonitor","laptop","mouse","remote","keyboard","cell phone","microwave","oven","toaster","sink","refrigerator","book","clock","vase","scissors","teddy bear","hair drier","toothbrush")},
-                {'camera_ids': ('front', 'rear', 'left', 'right')}, # как звать камеры. Этот id уйдёт в header.frame_id
-                {'camera_rates': (5, 1, 1, 1)}, # обрабатывать каждый пятый кадр с первой и каждый кадр с остальных (5 раз в секунду с каждой)
-                {'camera_raw_topics': ('/vedrus/camera/front/color/image_raw', '/vedrus/camera/rear/image_raw', '/vedrus/camera/left/image_raw', '/vedrus/camera/right/image_raw')}, # откуда читать картинки
-                {'inference_topic': '/yolov8/inference'}, # куда кидать солвы
-            ]
-        ),
 '''
