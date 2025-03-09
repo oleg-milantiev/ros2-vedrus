@@ -41,9 +41,9 @@ Dependencies:
 - getch package (pip install getch)
 """
 
-import rclpy
-from rclpy.node import Node
-from std_msgs.msg import Header
+import rclpy # type: ignore
+from rclpy.node import Node # type: ignore
+from std_msgs.msg import Header # type: ignore
 from vedrus_interfaces.msg import MotorCommand
 import getch
 
