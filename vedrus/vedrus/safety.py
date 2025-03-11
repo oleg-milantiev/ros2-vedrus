@@ -73,7 +73,6 @@ class SafetyNode(Node):
     def __init__(self):
         super().__init__('safety_node')
         self.crash = False
-        self.depth_count = 0
 
         # 10 sec keepalive start gap
         self.keepaliveSonar = self.keepaliveDepth = self.keepaliveController = time.time() + 10
@@ -159,17 +158,12 @@ class SafetyNode(Node):
     def depth_camera_callback(self, data):
         self.keepaliveDepth = time.time()
 
-        # Downrate from 30 to 5 fps
-        self.depth_count += 1
-        if self.depth_count % 6 != 0:
-            return  
-
-        # Convert ROS Image 848x480x30 into OpenCV image 212x120x5
+        # Input: Format: Z16, Width: 424, Height: 240, FPS: 6
         #depth_image = np.clip((bridge.imgmsg_to_cv2(data, desired_encoding='passthrough')[::4, ::4] >> 2), 0, 255).astype(np.uint8)
         depth_image = np.clip(cv2.resize(
             bridge.imgmsg_to_cv2(data, desired_encoding='passthrough') >> 2,
             (0, 0),
-            fx=0.25, fy=0.25,
+            fx=0.5, fy=0.5,
             interpolation=cv2.INTER_AREA
         ), 0, 255).astype(np.uint8)
 

@@ -27,7 +27,7 @@ from datetime import datetime
 
 bridge = CvBridge()
 
-IMG_SAVE_PATH = '/mnt/emmc/IMG/'
+#IMG_SAVE_PATH = '/mnt/emmc/IMG/'
 IMG_PUBLISH_TOPIC = '/yolov8/img_out'
 
 class YOLOv8_solver(Node):
