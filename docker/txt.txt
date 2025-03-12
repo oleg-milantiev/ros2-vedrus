@@ -1,0 +1,6 @@
+https://wiki.debian.org/NvidiaGraphicsDrivers - установка драйвера
+https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html - установка nvidia container toolkit
+docker compose build
+docker compose up -d
+docker compose exec -it ros2 bash
+nvidia-smi
