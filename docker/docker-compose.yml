@@ -1,0 +1,19 @@
+services:
+  ros2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+#    runtime: nvidia
+    container_name: ros2
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - .:/workspace
+    tty: true
