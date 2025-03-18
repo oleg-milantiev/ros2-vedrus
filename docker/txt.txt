@@ -2,8 +2,9 @@ https://wiki.debian.org/NvidiaGraphicsDrivers - установка драйвера
 https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html - установка nvidia container toolkit
 https://hub.docker.com/r/nvidia/cuda/tags?name=devel-ubuntu24 - какие есть версии куды под разные карты
 https://docs.nvidia.com/datacenter/tesla/tesla-release-notes-535-216-01/index.html совместимость драйвера с cuda версией (535 с 12.2)
+
+sh docker.sh
 docker compose build
 docker compose up -d
 docker compose exec -it ros2 bash
 nvidia-smi
-python3 -m pip --no-cache-dir install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121

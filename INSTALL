@@ -1,0 +1,19 @@
+## new Debian 12 installation
+
+## INSTALL GPU
+
+# (manual action needed) add contrib non-free into /etc/apt/sources.list
+apt update
+apt install nvidia-driver firmware-misc-nonfree
+reboot
+
+# install toolkit
+sh ./docker/nvidia.sh
+
+# check is GPU visible
+nvidia-smi
+
+
+## INSTALL Docker
+sh ./docker/docker.install.sh
+
