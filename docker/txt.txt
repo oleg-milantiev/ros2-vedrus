@@ -4,7 +4,10 @@ https://hub.docker.com/r/nvidia/cuda/tags?name=devel-ubuntu24 - какие есть верси
 https://docs.nvidia.com/datacenter/tesla/tesla-release-notes-535-216-01/index.html совместимость драйвера с cuda версией (535 с 12.2)
 
 sh docker.sh
-docker compose build
+#docker build -t olegmilantiev/docker-ros2-nvidia:cuda12.2.2-ubuntu22.04-ros2_rolling .
 docker compose up -d
 docker compose exec -it ros2 bash
 nvidia-smi
+
+
+

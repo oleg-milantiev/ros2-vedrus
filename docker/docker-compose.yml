@@ -1,10 +1,11 @@
 services:
   ros2:
-    build:
-      context: .
-      dockerfile: Dockerfile
-#    runtime: nvidia
+#    build:
+#      context: .
+#      dockerfile: Dockerfile
+    image: olegmilantiev/docker-ros2-nvidia:cuda12.2.2-ubuntu22.04-ros2_iron
     container_name: ros2
+    privileged: true
     deploy:
       resources:
         reservations:
@@ -15,5 +16,7 @@ services:
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
     volumes:
-      - .:/workspace
+      - /ros2-vedrus:/ros2-vedrus
+      - /dev:/dev
     tty: true
+    working_dir: /ros2-vedrus

@@ -3,11 +3,12 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node # type: ignore
 import subprocess
+import hashlib
 
 SEEK_TEMPLATES = [
-    "USB Camera: USB Camera (usb-xhci-hcd.4.auto-1.3):", # rear
-    "USB Camera: USB Camera (usb-xhci-hcd.4.auto-1.4.1):", # right
-    "USB Camera: USB Camera (usb-xhci-hcd.4.auto-1.4.2):" # left
+    "USB Camera: USB Camera (usb-0000:00:14.0-7.3):", # rear
+    "USB Camera: USB Camera (usb-0000:00:14.0-7.4.1):", # right
+    "USB Camera: USB Camera (usb-0000:00:14.0-7.4.2):" # left
 ]
 
 def get_video_devices():
@@ -20,7 +21,7 @@ def get_video_devices():
     for line in lines:
         line = line.strip()
         if line in SEEK_TEMPLATES:
-            current_camera = line
+            current_camera = hashlib.md5(line.encode()).hexdigest()
             camera_devices[current_camera] = []
         elif current_camera and line.startswith('/dev/video'):
             camera_devices[current_camera].append(line)
@@ -73,14 +74,14 @@ def generate_launch_description():
             ]
         ),
         Node(
-            package='usb_cam',
-            executable='usb_cam_node_exe',
+            package='v4l2_camera',
+            executable='v4l2_camera_node',
             name='rear',
             namespace='vedrus/camera/rear',
             output='log',
             emulate_tty=True,
             parameters=[
-                {'video_device': yuyv_cameras['USB Camera: USB Camera (usb-xhci-hcd.4.auto-1.3):']},
+                {'video_device': yuyv_cameras[ hashlib.md5("USB Camera: USB Camera (usb-0000:00:14.0-7.3):".encode()).hexdigest() ]},
                 {'image_width': 800},
                 {'image_height': 600},
                 {'framerate': 5.0},
@@ -96,14 +97,14 @@ def generate_launch_description():
             ]
         ),
         Node(
-            package='usb_cam',
-            executable='usb_cam_node_exe',
+            package='v4l2_camera',
+            executable='v4l2_camera_node',
             output='log',
             name='right',
             namespace='vedrus/camera/right',
             emulate_tty=True,
             parameters=[
-                {'video_device': yuyv_cameras['USB Camera: USB Camera (usb-xhci-hcd.4.auto-1.4.1):']},
+                {'video_device': yuyv_cameras[ hashlib.md5("USB Camera: USB Camera (usb-0000:00:14.0-7.4.1):".encode()).hexdigest() ]},
                 {'image_width': 800},
                 {'image_height': 600},
                 {'framerate': 5.0},
@@ -119,14 +120,14 @@ def generate_launch_description():
             ]
         ),
         Node(
-            package='usb_cam',
-            executable='usb_cam_node_exe',
+            package='v4l2_camera',
+            executable='v4l2_camera_node',
             output='log',
             name='left',
             namespace='vedrus/camera/left',
             emulate_tty=True,
             parameters=[
-                {'video_device': yuyv_cameras['USB Camera: USB Camera (usb-xhci-hcd.4.auto-1.4.2):']},
+                {'video_device': yuyv_cameras[ hashlib.md5("USB Camera: USB Camera (usb-0000:00:14.0-7.4.2):".encode()).hexdigest() ]},
                 {'image_width': 800},
                 {'image_height': 600},
                 {'framerate': 5.0},
