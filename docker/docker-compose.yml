@@ -3,7 +3,8 @@ services:
 #    build:
 #      context: .
 #      dockerfile: Dockerfile
-    image: olegmilantiev/docker-ros2-nvidia:cuda12.2.2-ubuntu22.04-ros2_iron
+#    image: olegmilantiev/docker-ros2-nvidia:cuda12.2.2-ubuntu22.04-ros2_iron
+    image: olegmilantiev/docker-ros2-nvidia:cuda12.6.3-ubuntu24.04-ros2_jazzy
     container_name: ros2
     privileged: true
     deploy:
