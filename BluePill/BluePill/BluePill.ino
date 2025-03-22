@@ -1,27 +1,33 @@
 /*
  * BluePill.ino - Motor Controller for Vedrus Robot
  * 
- * This firmware implements a motor controller for the Vedrus robot using STM32 BluePill board.
+ * This firmware implements a motor controller for the Vedrus robot using STM32 BluePill board (STM32F103C6T6).
+ * https://embeddeddesignblog.blogspot.com/2022/08/stm32f103c6t6-vs-stm32f103c8t6.html
  * It utilizes hardware quadrature encoder support via Timer for precise
  * position and speed measurement. The controller implements PID control for motor speed
  * regulation and communicates with the main controller via Serial interface.
  * 
  * Hardware Setup:
- * - Encoder: Timer3 (PA6/PA7) in hardware quadrature mode (4x resolution)
- * - Motor Control: PWM output (PA2), direction control (PA1), brake control (PA0)
+ * - EncoderLeft: Timer3 (PA6/PA7) in hardware quadrature mode (4x resolution)
+ * - EncoderRight: Timer2 (PA0/PA1) in hardware quadrature mode (4x resolution)
+ * - Left Motor Control: PWM output (PA2), direction control (PA1), brake control (PA0)
  * - Communication: USB Serial at 115200 baud
  * 
  * Protocol:
- * Commands:
+ * Commands (right motor):
  * - 'S': Stop motor (set target speed to 0)
  * - 'M': Set target speed (followed by signed integer value)
  * - 'P': Set PID Kp value (followed by float value)
  * - 'I': Set PID Ki value (followed by float value)
  * - 'D': Set PID Kd value (followed by float value)
- * 
+ * Commands (left motor):
+ * - same with lowercase: s, m, i, i, d
+ * Command (common): 
+ * - X: Set Maximum PWM for both motors
+ *
  * Status Format: SIDE,POS:position,SPD:speed,TGT:target,PWR:power,PID:Kp/Ki/Kd
  * Where:
- * - SIDE is either VEDL (left) or VEDR (right)
+ * - SIDE is either LEFT or RIGHT
  * - position: Current encoder position (ticks)
  * - speed: Current speed (ticks/second)
  * - target: Target speed (ticks/second)
@@ -34,49 +40,71 @@
 #include <HardwareTimer.h>
 
 // Configuration
-const bool IS_LEFT_SIDE = true;  // Set to false for right side
-const char* SIDE_NAME = IS_LEFT_SIDE ? "VEDL" : "VEDR";
-const int TICKS_WHEEL = 16384;    // Encoder ticks per wheel revolution
-int MAX_PWM = 20;          // Initial maximum PWM value for motor control
+const int TICKS_WHEEL = 16384;  // Encoder ticks per wheel revolution
+int MAX_PWM = 20;               // Initial maximum PWM value for both motors
 
 // Pin definitions
-const int LED_PIN = PC13;   // Internal LED pin
-const int ENCODER_A = PA6;  // Timer 3 Channel 1
-const int ENCODER_B = PA7;  // Timer 3 Channel 2
-const int MOTOR_BRK = PA0;  // Break control pin TBD
-const int MOTOR_DIR = PA1;  // Direction control pin
-const int MOTOR_PWM = PA2;  // PWM output pin
+const int LED_PIN = PC13;         // Internal LED pin
+const int ENCODER_LEFT_A = PA6;   // Timer 3 Channel 1
+const int ENCODER_LEFT_B = PA7;   // Timer 3 Channel 2
+const int ENCODER_RIGHT_A = PA0;  // Timer 2 Channel 1
+const int ENCODER_RIGHT_B = PA1;  // Timer 2 Channel 2
+
+const int MOTOR_LEFT_DIR = PA5;    // Direction control pin
+const int MOTOR_LEFT_PWM = PB13;   // PWM output pin
+const int MOTOR_RIGHT_DIR = PB9;   // Direction control pin
+const int MOTOR_RIGHT_PWM = PB14;  // PWM output pin
 
 // Motor control variables
-double currentSpeed = 0;    // Current speed in ticks per second
-double targetSpeed = 0;     // Target speed in ticks per second
-double motorPower = 0;      // PWM output (-MAX_PWM to MAX_PWM)
+double currentSpeedLeft = 0;   // Current speed in ticks per second
+double targetSpeedLeft = 0;    // Target speed in ticks per second
+double motorPowerLeft = 0;     // PWM output (-MAX_PWM to MAX_PWM)
+double currentSpeedRight = 0;  // Current speed in ticks per second
+double targetSpeedRight = 0;   // Target speed in ticks per second
+double motorPowerRight = 0;    // PWM output (-MAX_PWM to MAX_PWM)
 
-// Timer handle for encoder
-HardwareTimer *EncoderTimer = new HardwareTimer(TIM3);
+// Timer handle for encoders
+HardwareTimer *EncoderTimerLeft = new HardwareTimer(TIM3);
+HardwareTimer *EncoderTimerRight = new HardwareTimer(TIM2);
+HardwareTimer timer1(TIM1);  // For PWM via Timer1
 
 // PID parameters
-double Kp = 0.001;
-double Ki = 0.008;
-double Kd = 0.0;
+double KpLeft = 0.0005;
+double KiLeft = 0.008;
+double KdLeft = 0.0;
+double KpRight = 0.0005;
+double KiRight = 0.008;
+double KdRight = 0.0;
 
 // Create PID instance
-PID motorPID(&currentSpeed, &motorPower, &targetSpeed, Kp, Ki, Kd, DIRECT);
+PID motorPIDLeft(&currentSpeedLeft, &motorPowerLeft, &targetSpeedLeft, KpLeft, KiLeft, KdLeft, DIRECT);
+PID motorPIDRight(&currentSpeedRight, &motorPowerRight, &targetSpeedRight, KpRight, KiRight, KdRight, DIRECT);
 
 // Timing variables
 unsigned long lastSpeedCalc = 0;
-const unsigned long SPEED_CALC_INTERVAL = 5; // 5ms interval for speed calculation
-int32_t lastPosition = 0;
+const unsigned long SPEED_CALC_INTERVAL = 5;  // 5ms interval for speed calculation
+int32_t lastPositionLeft = 0;
+int32_t lastPositionRight = 0;
 
 // Encoder overflow tracking
-volatile int32_t encoderOverflows = 0;
+volatile int32_t encoderOverflowsLeft = 0;
+volatile int32_t encoderOverflowsRight = 0;
 
-void handleEncoderOverflow() {
+void handleEncoderOverflowLeft() {
   // Detect overflow direction
-  if (EncoderTimer->getCount() < 32767) {
-    encoderOverflows++;
+  if (EncoderTimerLeft->getCount() < 32767) {
+    encoderOverflowsLeft++;
   } else {
-    encoderOverflows--;
+    encoderOverflowsLeft--;
+  }
+}
+
+void handleEncoderOverflowRight() {
+  // Detect overflow direction
+  if (EncoderTimerRight->getCount() < 32767) {
+    encoderOverflowsRight++;
+  } else {
+    encoderOverflowsRight--;
   }
 }
 
@@ -88,59 +116,101 @@ void setup() {
   // Configure LED pin
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, HIGH);  // Turn off LED initially (active LOW)
-  
+
   // Configure motor control pins
-  pinMode(MOTOR_DIR, OUTPUT);
-  pinMode(MOTOR_PWM, OUTPUT);
-  
-  // Configure encoder pins for Timer4
-  pinMode(ENCODER_A, INPUT_PULLUP);
-  pinMode(ENCODER_B, INPUT_PULLUP);
-  
-  EncoderTimer->pause();
+  pinMode(MOTOR_LEFT_DIR, OUTPUT);
+  pinMode(MOTOR_LEFT_PWM, OUTPUT);
+  pinMode(MOTOR_RIGHT_DIR, OUTPUT);
+  pinMode(MOTOR_RIGHT_PWM, OUTPUT);
+
+  // Use Timer1 for PWM
+  // Disable Break Input (PB4)
+  pinMode(PB4, OUTPUT);
+  digitalWrite(PB4, LOW);
+
+  // Configure encoder pins for Timers (motor's encoders)
+  pinMode(ENCODER_LEFT_A, INPUT_PULLUP);
+  pinMode(ENCODER_LEFT_B, INPUT_PULLUP);
+  pinMode(ENCODER_RIGHT_A, INPUT_PULLUP);
+  pinMode(ENCODER_RIGHT_B, INPUT_PULLUP);
+
+  EncoderTimerLeft->pause();
+  EncoderTimerRight->pause();
 
   // Configure Timer3 for hardware encoder mode
-  TIM_HandleTypeDef *htim3 = EncoderTimer->getHandle();
+  TIM_HandleTypeDef *htim3 = EncoderTimerLeft->getHandle();
   __HAL_RCC_TIM3_CLK_ENABLE();
 
   htim3->Instance = TIM3;
-  htim3->Init.Prescaler = 0; // No prescaler
+  htim3->Init.Prescaler = 0;  // No prescaler
   htim3->Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3->Init.Period = 65535; // Maximum count
+  htim3->Init.Period = 65535;  // Maximum count
   htim3->Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
 
+  // Configure Timer2 for hardware encoder mode
+  TIM_HandleTypeDef *htim2 = EncoderTimerRight->getHandle();
+  __HAL_RCC_TIM2_CLK_ENABLE();
+
+  htim2->Instance = TIM2;
+  htim2->Init.Prescaler = 0;  // No prescaler
+  htim2->Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2->Init.Period = 65535;  // Maximum count
+  htim2->Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+
   // Initialize the encoder configuration structure
-  TIM_Encoder_InitTypeDef encoderConfig = {
-      .EncoderMode = TIM_ENCODERMODE_TI12,          // 4x resolution
-      .IC1Polarity = TIM_ICPOLARITY_RISING,
-      .IC1Selection = TIM_ICSELECTION_DIRECTTI,
-      .IC1Prescaler = TIM_ICPSC_DIV1,
-      .IC1Filter = 0,
-      .IC2Polarity = TIM_ICPOLARITY_RISING,
-      .IC2Selection = TIM_ICSELECTION_DIRECTTI,
-      .IC2Prescaler = TIM_ICPSC_DIV1,
-      .IC2Filter = 0};
+  TIM_Encoder_InitTypeDef encoderConfigLeft = {
+    .EncoderMode = TIM_ENCODERMODE_TI12,  // 4x resolution
+    .IC1Polarity = TIM_ICPOLARITY_RISING,
+    .IC1Selection = TIM_ICSELECTION_DIRECTTI,
+    .IC1Prescaler = TIM_ICPSC_DIV1,
+    .IC1Filter = 0,
+    .IC2Polarity = TIM_ICPOLARITY_RISING,
+    .IC2Selection = TIM_ICSELECTION_DIRECTTI,
+    .IC2Prescaler = TIM_ICPSC_DIV1,
+    .IC2Filter = 0
+  };
+  TIM_Encoder_InitTypeDef encoderConfigRight = {
+    .EncoderMode = TIM_ENCODERMODE_TI12,  // 4x resolution
+    .IC1Polarity = TIM_ICPOLARITY_RISING,
+    .IC1Selection = TIM_ICSELECTION_DIRECTTI,
+    .IC1Prescaler = TIM_ICPSC_DIV1,
+    .IC1Filter = 0,
+    .IC2Polarity = TIM_ICPOLARITY_RISING,
+    .IC2Selection = TIM_ICSELECTION_DIRECTTI,
+    .IC2Prescaler = TIM_ICPSC_DIV1,
+    .IC2Filter = 0
+  };
 
   // Pass the address of the properly initialized structure
-  if (HAL_TIM_Encoder_Init(htim3, &encoderConfig) != HAL_OK) {
-    Serial.println("Error initializing encoder!");
-    while (1); // Halt execution if encoder initialization fails
+  if (
+    (HAL_TIM_Encoder_Init(htim3, &encoderConfigLeft) != HAL_OK) || (HAL_TIM_Encoder_Init(htim2, &encoderConfigRight) != HAL_OK)) {
+    Serial.println("Error initializing encoders!");
+    while (1)
+      ;  // Halt execution if encoder initialization fails
   }
 
   HAL_TIM_Encoder_Start(htim3, TIM_CHANNEL_ALL);
+  HAL_TIM_Encoder_Start(htim2, TIM_CHANNEL_ALL);
 
-  EncoderTimer->setCount(0);     // Start at zero
-  
+  EncoderTimerLeft->setCount(0);   // Start at zero
+  EncoderTimerRight->setCount(0);  // Start at zero
+
   // Enable overflow interrupts
-  EncoderTimer->setOverflow(65535);
-  EncoderTimer->attachInterrupt(handleEncoderOverflow);
+  EncoderTimerLeft->setOverflow(65535);
+  EncoderTimerLeft->attachInterrupt(handleEncoderOverflowLeft);
+  EncoderTimerRight->setOverflow(65535);
+  EncoderTimerRight->attachInterrupt(handleEncoderOverflowRight);
 
-  EncoderTimer->resume();
+  EncoderTimerLeft->resume();
+  EncoderTimerRight->resume();
 
   // Configure PID
-  motorPID.SetMode(AUTOMATIC);
-  motorPID.SetOutputLimits(-MAX_PWM, MAX_PWM);
-  motorPID.SetSampleTime(SPEED_CALC_INTERVAL);
+  motorPIDLeft.SetMode(AUTOMATIC);
+  motorPIDLeft.SetOutputLimits(-MAX_PWM, MAX_PWM);
+  motorPIDLeft.SetSampleTime(SPEED_CALC_INTERVAL);
+  motorPIDRight.SetMode(AUTOMATIC);
+  motorPIDRight.SetOutputLimits(-MAX_PWM, MAX_PWM);
+  motorPIDRight.SetSampleTime(SPEED_CALC_INTERVAL);
 }
 
 uint8_t sendStatusCount = 0;
@@ -148,13 +218,13 @@ uint8_t sendStatusCount = 0;
 void loop() {
   // Process any incoming serial commands
   processSerialCommands();
-  
+
   // Calculate current speed at 200 Hz (every 5ms)
   if (millis() - lastSpeedCalc >= SPEED_CALC_INTERVAL) {
     calculateSpeed();
-    updateMotor();
+    updateMotors();
     brightLED();
-    if (sendStatusCount++ == 20) { // Send status at 10 Hz
+    if (sendStatusCount++ == 20) {  // Send status at 10 Hz
       sendStatus();
       sendStatusCount = 0;
     }
@@ -164,24 +234,33 @@ void loop() {
 
 void calculateSpeed() {
   // Read encoder position using hardware timer
-  uint16_t timerCount = EncoderTimer->getCount();
-  int32_t newPosition = (encoderOverflows << 16) + timerCount;
+  uint16_t timerCountLeft = EncoderTimerLeft->getCount();
+  int32_t newPositionLeft = (encoderOverflowsLeft << 16) + timerCountLeft;
 
-  currentSpeed = ((newPosition - lastPosition) * 1000.0) / SPEED_CALC_INTERVAL;
-  
-  lastPosition = newPosition;
+  currentSpeedLeft = ((newPositionLeft - lastPositionLeft) * 1000.0) / SPEED_CALC_INTERVAL;
+  lastPositionLeft = newPositionLeft;
+
+  uint16_t timerCountRight = EncoderTimerRight->getCount();
+  int32_t newPositionRight = (encoderOverflowsRight << 16) + timerCountRight;
+
+  currentSpeedRight = ((newPositionRight - lastPositionRight) * 1000.0) / SPEED_CALC_INTERVAL;
+  lastPositionRight = newPositionRight;
 }
 
-uint8_t hangCount = 0;
-uint8_t zeroCount = 0;
+uint8_t hangCountLeft = 0;
+uint8_t zeroCountLeft = 0;
+uint8_t hangCountRight = 0;
+uint8_t zeroCountRight = 0;
 
-void updateMotor() {
-  // Update PID and apply to motor
-  motorPID.Compute();
-  
+void updateMotors() {
+  // Update PID and apply to motors
+  motorPIDLeft.Compute();
+  motorPIDRight.Compute();
+
   // Set direction and power based on calculated motor power
-  digitalWrite(MOTOR_DIR, motorPower >= 0 ? HIGH : LOW);
-  
+  digitalWrite(MOTOR_LEFT_DIR, motorPowerLeft >= 0 ? HIGH : LOW);
+  digitalWrite(MOTOR_RIGHT_DIR, motorPowerRight >= 0 ? HIGH : LOW);
+
   /**
    ** Try to prevent controller hangup
    [hang,zero]
@@ -196,21 +275,42 @@ void updateMotor() {
    zeroCount > 5, so must go back to normal check
    [0,0]
   **/
-  if ((abs(motorPower) > 0.5) && currentSpeed == 0) {
-    if (++hangCount > 10) {
-      analogWrite(MOTOR_PWM, 0);
-      hangCount = 11; // overflow protection
-      if (++zeroCount > 5) {
+  if ((abs(motorPowerLeft) > 0.5) && currentSpeedLeft == 0) {
+    if (++hangCountLeft > 10) {
+      //analogWrite(MOTOR_LEFT_PWM, 0);
+      timer1.setPWM(1, PB13, 1000, 0);
+      hangCountLeft = 11;  // overflow protection
+      if (++zeroCountLeft > 5) {
         // we can hold zero pwm only 5 cycles
-        zeroCount = 0;
-        hangCount = 0;
-        analogWrite(MOTOR_PWM, abs(motorPower));
+        zeroCountLeft = 0;
+        hangCountLeft = 0;
+        //analogWrite(MOTOR_LEFT_PWM, abs(motorPowerLeft));
+        timer1.setPWM(1, PB13, 1000, abs(motorPowerLeft));
       }
     }
+  } else {
+    //analogWrite(MOTOR_LEFT_PWM, abs(motorPowerLeft));
+    timer1.setPWM(1, PB13, 1000, abs(motorPowerLeft));
+    hangCountLeft = 0;
   }
-  else {
-    analogWrite(MOTOR_PWM, abs(motorPower));
-    hangCount = 0;
+
+  if ((abs(motorPowerRight) > 0.5) && currentSpeedRight == 0) {
+    if (++hangCountRight > 10) {
+      //analogWrite(MOTOR_RIGHT_PWM, 0);
+      timer1.setPWM(2, PB14, 1000, 0);
+      hangCountRight = 11;  // overflow protection
+      if (++zeroCountRight > 5) {
+        // we can hold zero pwm only 5 cycles
+        zeroCountRight = 0;
+        hangCountRight = 0;
+        //analogWrite(MOTOR_RIGHT_PWM, abs(motorPowerRight));
+        timer1.setPWM(2, PB14, 1000, abs(motorPowerRight));
+      }
+    }
+  } else {
+    //analogWrite(MOTOR_RIGHT_PWM, abs(motorPowerRight));
+    timer1.setPWM(2, PB14, 1000, abs(motorPowerRight));
+    hangCountRight = 0;
   }
 }
 
@@ -218,47 +318,78 @@ void processSerialCommands() {
   if (Serial.available() > 0) {
     char cmd = Serial.read();
     delay(5);
-    
+
     switch (cmd) {
-      case 'S': // Stop
-        targetSpeed = 0;
+      case 's':  // Stop Left
+        targetSpeedLeft = 0;
         break;
-        
-      case 'M': // Move with signed speed
+      case 'S':  // Stop Right
+        targetSpeedRight = 0;
+        break;
+
+      case 'm':  // Move left with signed speed
         if (Serial.available()) {
-          targetSpeed = Serial.parseInt();
+          targetSpeedLeft = Serial.parseInt();
+          while (Serial.available()) Serial.read();
+        }
+        break;
+      case 'M':  // Move right with signed speed
+        if (Serial.available()) {
+          targetSpeedRight = Serial.parseInt();
           while (Serial.available()) Serial.read();
         }
         break;
 
-      case 'P': // Set Kp
+      case 'p':  // Set Left Kp
         if (Serial.available()) {
-          Kp = Serial.parseFloat();
-          motorPID.SetTunings(Kp, Ki, Kd);
+          KpLeft = Serial.parseFloat();
+          motorPIDLeft.SetTunings(KpLeft, KiLeft, KdLeft);
+          while (Serial.available()) Serial.read();
+        }
+        break;
+      case 'P':  // Set Right Kp
+        if (Serial.available()) {
+          KpRight = Serial.parseFloat();
+          motorPIDRight.SetTunings(KpRight, KiRight, KdRight);
           while (Serial.available()) Serial.read();
         }
         break;
 
-      case 'I': // Set Ki
+      case 'i':  // Set Left Ki
         if (Serial.available()) {
-          Ki = Serial.parseFloat();
-          motorPID.SetTunings(Kp, Ki, Kd);
+          KiLeft = Serial.parseFloat();
+          motorPIDLeft.SetTunings(KpLeft, KiLeft, KdLeft);
+          while (Serial.available()) Serial.read();
+        }
+        break;
+      case 'I':  // Set Right Ki
+        if (Serial.available()) {
+          KiRight = Serial.parseFloat();
+          motorPIDRight.SetTunings(KpRight, KiRight, KdRight);
           while (Serial.available()) Serial.read();
         }
         break;
 
-      case 'D': // Set Kd
+      case 'd':  // Set Left Kd
         if (Serial.available()) {
-          Kd = Serial.parseFloat();
-          motorPID.SetTunings(Kp, Ki, Kd);
+          KdLeft = Serial.parseFloat();
+          motorPIDLeft.SetTunings(KpLeft, KiLeft, KdLeft);
+          while (Serial.available()) Serial.read();
+        }
+        break;
+      case 'D':  // Set Right Kd
+        if (Serial.available()) {
+          KdRight = Serial.parseFloat();
+          motorPIDRight.SetTunings(KpRight, KiRight, KdRight);
           while (Serial.available()) Serial.read();
         }
         break;
 
-      case 'X': // Set MAX_PWM
+      case 'X':  // Set MAX_PWM
         if (Serial.available()) {
           MAX_PWM = Serial.parseInt();
-          motorPID.SetOutputLimits(-MAX_PWM, MAX_PWM);
+          motorPIDLeft.SetOutputLimits(-MAX_PWM, MAX_PWM);
+          motorPIDRight.SetOutputLimits(-MAX_PWM, MAX_PWM);
           while (Serial.available()) Serial.read();
         }
         break;
@@ -267,33 +398,52 @@ void processSerialCommands() {
 }
 
 void sendStatus() {
-  uint16_t timerCount = EncoderTimer->getCount();
-  int32_t position = (encoderOverflows << 16) + timerCount;
-  
-  Serial.print(SIDE_NAME);
-  Serial.print(",POS:");
-  Serial.print(position);
+  uint16_t timerCountLeft = EncoderTimerLeft->getCount();
+  int32_t positionLeft = (encoderOverflowsLeft << 16) + timerCountLeft;
+  uint16_t timerCountRight = EncoderTimerRight->getCount();
+  int32_t positionRight = (encoderOverflowsRight << 16) + timerCountRight;
+
+  Serial.print("LEFT,POS:");
+  Serial.print(positionLeft);
   Serial.print(",SPD:");
-  Serial.print(currentSpeed);
+  Serial.print(currentSpeedLeft);
   Serial.print(",TGT:");
-  Serial.print(targetSpeed);
+  Serial.print(targetSpeedLeft);
   Serial.print(",PWR:");
-  Serial.print(motorPower);
+  Serial.print(motorPowerLeft);
   Serial.print(",PID:");
-  Serial.print(Kp, 3);
+  Serial.print(KpLeft, 4);
   Serial.print("/");
-  Serial.print(Ki, 3);
+  Serial.print(KiLeft, 4);
   Serial.print("/");
-  Serial.print(Kd, 3);
+  Serial.print(KdLeft, 4);
+  Serial.print(",MAX:");
+  Serial.println(MAX_PWM);
+
+  Serial.print("RIGHT,POS:");
+  Serial.print(positionRight);
+  Serial.print(",SPD:");
+  Serial.print(currentSpeedRight);
+  Serial.print(",TGT:");
+  Serial.print(targetSpeedRight);
+  Serial.print(",PWR:");
+  Serial.print(motorPowerRight);
+  Serial.print(",PID:");
+  Serial.print(KpRight, 4);
+  Serial.print("/");
+  Serial.print(KiRight, 4);
+  Serial.print("/");
+  Serial.print(KdRight, 4);
   Serial.print(",MAX:");
   Serial.println(MAX_PWM);
 }
 
 void brightLED() {
   // Turn on LED if speed is greater than half of TICKS_WHEEL
-  int absSpeed = abs(currentSpeed);
-  bool isHighSpeed = absSpeed > (TICKS_WHEEL / 2);
-  
+  int absSpeedLeft = abs(currentSpeedLeft);
+  int absSpeedRight = abs(currentSpeedRight);
+  bool isHighSpeed = (absSpeedLeft > (TICKS_WHEEL / 2)) || (absSpeedRight > (TICKS_WHEEL / 2));
+
   // PC13 is active LOW on BluePill, so use LOW for ON
   digitalWrite(LED_PIN, isHighSpeed ? LOW : HIGH);
 }
