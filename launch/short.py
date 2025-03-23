@@ -3,12 +3,13 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node # type: ignore
 import subprocess
+import hashlib
 
-SEEK_TEMPLATES = [
-    "USB Camera: USB Camera (usb-xhci-hcd.4.auto-1.3):", # rear
-    "USB Camera: USB Camera (usb-xhci-hcd.4.auto-1.4.1):", # right
-    "USB Camera: USB Camera (usb-xhci-hcd.4.auto-1.4.2):" # left
-]
+CAMERA_LEFT = "USB Camera: USB Camera (usb-0000:00:14.0-1):"
+CAMERA_RIGHT = "USB Camera: USB Camera (usb-0000:00:14.0-7):"
+CAMERA_REAR = "USB Camera: USB Camera (usb-0000:00:14.0-9):"
+
+SEEK_TEMPLATES = [CAMERA_LEFT, CAMERA_RIGHT, CAMERA_REAR]
 
 def get_video_devices():
     """Get the output of v4l2-ctl --list-devices and parse it."""
@@ -20,7 +21,7 @@ def get_video_devices():
     for line in lines:
         line = line.strip()
         if line in SEEK_TEMPLATES:
-            current_camera = line
+            current_camera = hashlib.md5(line.encode()).hexdigest()
             camera_devices[current_camera] = []
         elif current_camera and line.startswith('/dev/video'):
             camera_devices[current_camera].append(line)
@@ -80,7 +81,7 @@ def generate_launch_description():
             output='log',
             emulate_tty=True,
             parameters=[
-                {'video_device': yuyv_cameras['USB Camera: USB Camera (usb-xhci-hcd.4.auto-1.3):']},
+                {'video_device': yuyv_cameras[ hashlib.md5(CAMERA_REAR.encode()).hexdigest() ]},
                 {'image_width': 800},
                 {'image_height': 600},
                 {'framerate': 5.0},
@@ -88,7 +89,7 @@ def generate_launch_description():
                 {'autoexposure': False},
                 {'exposure_auto_priority': 0},
                 {'backlight_compensation': 2},
-                {'gamma': 0},
+                {'gamma': 100},
                 {'gain': 10},
                 {'brightness': 0},
                 {'contrast': 20},
@@ -103,7 +104,7 @@ def generate_launch_description():
             namespace='vedrus/camera/right',
             emulate_tty=True,
             parameters=[
-                {'video_device': yuyv_cameras['USB Camera: USB Camera (usb-xhci-hcd.4.auto-1.4.1):']},
+                {'video_device': yuyv_cameras[ hashlib.md5(CAMERA_RIGHT.encode()).hexdigest() ]},
                 {'image_width': 800},
                 {'image_height': 600},
                 {'framerate': 5.0},
@@ -111,7 +112,7 @@ def generate_launch_description():
                 {'autoexposure': False},
                 {'exposure_auto_priority': 0},
                 {'backlight_compensation': 2},
-                {'gamma': 0},
+                {'gamma': 100},
                 {'gain': 10},
                 {'brightness': 0},
                 {'contrast': 20},
@@ -126,7 +127,7 @@ def generate_launch_description():
             namespace='vedrus/camera/left',
             emulate_tty=True,
             parameters=[
-                {'video_device': yuyv_cameras['USB Camera: USB Camera (usb-xhci-hcd.4.auto-1.4.2):']},
+                {'video_device': yuyv_cameras[ hashlib.md5(CAMERA_LEFT.encode()).hexdigest() ]},
                 {'image_width': 800},
                 {'image_height': 600},
                 {'framerate': 5.0},
@@ -134,7 +135,7 @@ def generate_launch_description():
                 {'autoexposure': False},
                 {'exposure_auto_priority': 0},
                 {'backlight_compensation': 2},
-                {'gamma': 0},
+                {'gamma': 100},
                 {'gain': 10},
                 {'brightness': 0},
                 {'contrast': 20},
@@ -171,16 +172,12 @@ def generate_launch_description():
         ),
 
         Node(
-            package='yolov8_rknn',
+            package='yolov8_nvidia',
             executable='solver',
             output='log',
             emulate_tty=True,
             parameters=[
-#				{'model': '/opt/ros/iron/family.rknn'},
-#				{'classes': ("alex", "bars", "dad", "fish", "ivan", "marta", "max", "mom", "oleg", "poly", "turtle", "yury")},
-                {'model': '/opt/ros/iron/yolov8n-1.5.2.rknn'},
-#                {'model': '/opt/ros/iron/yolo11n-rk3566.rknn'},
-                {'classes': ("person","bicycle","car","motorbike","airplane","bus","train","truck","boat","traffic light","fire hydrant","stop sign","parking meter","bench","bird","cat","dog","horse","sheep","cow","elephant","bear","zebra","giraffe","backpack","umbrella","handbag","tie","suitcase","frisbee","skis","snowboard","sports ball","kite","baseball bat","baseball glove","skateboard","surfboard","tennis racket","bottle","wine glass","cup","fork","knife","spoon","bowl","banana","apple","sandwich","orange","broccoli","carrot","hot dog","pizza","donut","cake","chair","sofa","pottedplant","bed","diningtable","toilet","tvmonitor","laptop","mouse","remote","keyboard","cell phone","microwave","oven","toaster","sink","refrigerator","book","clock","vase","scissors","teddy bear","hair drier","toothbrush")},
+                {'model': 'yolo11n.pt'},
                 {'camera_ids': ('front', 'rear', 'left', 'right')}, # как звать камеры. Этот id уйдёт в header.frame_id
                 {'camera_rates': (1, 1, 1, 1)}, # обрабатывать каждый кадр с первой и каждый кадр с остальных (5 раз в секунду с каждой)
                 {'camera_raw_topics': ('/vedrus/camera/front/color/image_raw', '/vedrus/camera/rear/image_raw', '/vedrus/camera/left/image_raw', '/vedrus/camera/right/image_raw')}, # откуда читать картинки

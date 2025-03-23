@@ -1,8 +1,8 @@
 # Используем базовый образ с CUDA
-FROM nvidia/cuda:12.2.2-devel-ubuntu22.04
+FROM nvidia/cuda:12.6.3-runtime-ubuntu24.04
 
 LABEL maintainer="Oleg Milantiev oleg@milantiev.com"
-LABEL description="NVIDIA CUDA Toolkit on Ubuntu 24.04 with ROS2 Jazzy"
+LABEL description="NVIDIA CUDA Toolkit 12.6.3 runtime on Ubuntu 24.04 with ROS2 Jazzy"
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -22,21 +22,22 @@ RUN echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/r
 RUN apt update && apt-get upgrade -y
 
 
-RUN apt-get install -y ros-rolling-ros-base python3-pip
+RUN apt-get install -y ros-jazzy-ros-base python3-pip ros-jazzy-usb-cam ros-jazzy-realsense2-camera
 
 # Настраиваем окружение ROS 2
-RUN echo "source /opt/ros/rolling/setup.bash" >> /root/.bashrc
+RUN echo "source /opt/ros/jazzy/setup.bash" >> /root/.bashrc
+RUN echo "source /opt/ros/jazzy/install/local_setup.bash" >> /root/.bashrc
 
 # Устанавливаем дополнительные инструменты
 RUN apt-get install -y \
     build-essential \
-    python3-colcon-common-extensions python3-opencv
+    python3-colcon-common-extensions python3-opencv v4l-utils
 
-RUN python3 -m pip --no-cache-dir install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-RUN python3 -m pip --no-cache-dir install ultralytics
+RUN python3 -m pip --no-cache-dir install --break-system-packages torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+RUN python3 -m pip --no-cache-dir install --break-system-packages ultralytics
 
 # Задаем рабочую директорию
-WORKDIR /workspace
+WORKDIR /opt/ros/jazzy
 
 # Открываем терминал по умолчанию
 CMD ["/bin/bash"]
