@@ -90,6 +90,9 @@ int32_t lastPositionRight = 0;
 volatile int32_t encoderOverflowsLeft = 0;
 volatile int32_t encoderOverflowsRight = 0;
 
+bool isMovingLeft = false;
+bool isMovingRight = false;
+
 void handleEncoderOverflowLeft() {
   // Detect overflow direction
   if (EncoderTimerLeft->getCount() < 32767) {
@@ -257,6 +260,13 @@ void updateMotors() {
   motorPIDLeft.Compute();
   motorPIDRight.Compute();
 
+  if (!isMovingLeft) {
+    motorPowerLeft = 0;
+  }
+  if (!isMovingRight) {
+    motorPowerRight = 0;
+  }
+
   // Set direction and power based on calculated motor power
   digitalWrite(MOTOR_LEFT_DIR, motorPowerLeft >= 0 ? HIGH : LOW);
   digitalWrite(MOTOR_RIGHT_DIR, motorPowerRight >= 0 ? HIGH : LOW);
@@ -322,19 +332,23 @@ void processSerialCommands() {
     switch (cmd) {
       case 's':  // Stop Left
         targetSpeedLeft = 0;
+        isMovingLeft = false;
         break;
       case 'S':  // Stop Right
         targetSpeedRight = 0;
+        isMovingRight = false;
         break;
 
       case 'm':  // Move left with signed speed
         if (Serial.available()) {
           targetSpeedLeft = Serial.parseInt();
+          isMovingLeft = true;
           while (Serial.available()) Serial.read();
         }
         break;
       case 'M':  // Move right with signed speed
         if (Serial.available()) {
+          isMovingRight = true;
           targetSpeedRight = Serial.parseInt();
           while (Serial.available()) Serial.read();
         }
